@@ -1,1 +1,12 @@
+<<<<<<< HEAD
 .venv/
+=======
+.venv/
+node_modules/
+__pycache__/
+.env
+dist/
+build/
+*.pyc
+.vscode/
+>>>>>>> feat/initial-setup
