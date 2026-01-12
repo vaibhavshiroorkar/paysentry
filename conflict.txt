@@ -1,2 +1,2 @@
 This is the original line.
-By The Manager.
+By Me (The Developer).
