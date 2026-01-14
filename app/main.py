@@ -1,21 +1,41 @@
 from fastapi import FastAPI
+from typing import Optional
+from pydantic import BaseModel, Field
+from decimal import Decimal
 
-# 1. Initialize the App
-# title: Shows up in the automatic documentation
-# version: Helps track updates
-app = FastAPI(
-    title="PaySentry Core",
-    version="0.1.0",
-    description="High-performance Payment Processing API"
-)
+class Transaction(BaseModel):
+    amount: float
+    description: Optional[str] = None
+    currency: str = "INR" # Default value
 
-# 2. A Simple Health Check Route
-# GET / -> Returns a JSON message
+app = FastAPI(title="PaySentry API")
+
 @app.get("/")
-def root():
-    return {"message": "PaySentry System Online 🟢", "status": "active"}
-
-# 3. A Health Check endpoint (Standard practice)
-@app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "System Online", 
+        "version": "1.0"
+    }
+
+@app.get("/transaction/{txn_id}")
+def get_transaction(txn_id: int):
+    return {
+        "txn_id": txn_id,
+        "message": "Transaction found",
+        "type_of_id": str(type(txn_id))
+    }
+
+@app.get("/rate/")
+def get_exchange_rate(currency: str = "INR", date: Optional[str] = None):
+    return {
+        "currency": currency,
+        "date": date,
+        "rate": 90.27 if currency == "USD" else 1.0
+    }
+
+@app.post("/transactions/")
+def create_transaction(txn: Transaction):
+    return {
+        "message": "Transaction created successfully",
+        "data_received": txn
+    }
