@@ -34,16 +34,6 @@ The system evolves through three distinct phases: **Foundation (Core Payments)**
 
 ## 🚧 Development Roadmap
 
-<<<<<<< HEAD
-| Module | Status | Technology Stack |
-|------|-------|------------------|
-| Core Transaction Engine | 🟡 In Progress | FastAPI, Pydantic, Python 3.11+ |
-| Persistence Layer | ⏳ Upcoming | PostgreSQL, SQLAlchemy (Async), Alembic |
-| Real-Time Ledger | ⏳ Upcoming | Redis/Kafka (Atomic Updates), Webhooks |
-| Fraud Detection Engine | ⏳ Upcoming | XGBoost, Isolation Forest, Scikit-Learn |
-| Compliance Agent | ⏳ Upcoming | LangChain (RAG), LLMs, Vector DB |
-| Analytics Dashboard | ⏳ Upcoming | Streamlit, Plotly |
-=======
 | Phase | Module | Status | Technology Stack |
 | --- | --- | --- | --- |
 | **1** | **Transaction Engine** | 🟡 In Progress | FastAPI, PostgreSQL (AsyncPG), Docker |
@@ -54,7 +44,6 @@ The system evolves through three distinct phases: **Foundation (Core Payments)**
 | **2** | **Ops Dashboard** | ⏳ Upcoming | Streamlit, Plotly, EvidentlyAI |
 | **3** | **Compliance Agent** | ⏳ Upcoming | LangGraph, OpenAI/Groq, RAGAS |
 | **3** | **Knowledge Base** | ⏳ Upcoming | ChromaDB, HuggingFace Embeddings |
->>>>>>> d4a574ceb89cfaf13e4c18d26c1009ebe5b5cf5a
 
 ---
 
