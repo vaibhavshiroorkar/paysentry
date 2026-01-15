@@ -1,18 +1,3 @@
-
-# Step 4.1: Modelling the Transaction (Old School Method)
-
-# class Transaction:
-#     def __init__(self, txn_id: str, amount: Decimal, currency: str = "INR", status: str = "PENDING"):
-#         self.txn_id = txn_id
-#         self.amount = amount 
-#         self.currency = currency
-#         self.status = status
-    
-#     def __repr__(self):
-#         return f"Transaction({self.txn_id}, {self.currency}, {self.amount}, {self.status})"
-
-# Step 4.2: Modelling The Transaction (Modern Method)
-
 from decimal import Decimal
 from dataclasses import dataclass
 from enum import Enum

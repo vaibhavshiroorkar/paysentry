@@ -40,7 +40,7 @@ Currently in the **API Development Phase**, the system simulates modern banking 
 |------|-------|------------------|
 | Core Transaction Engine | 🟡 In Progress | FastAPI, Pydantic, Python 3.11+ |
 | Persistence Layer | ⏳ Upcoming | PostgreSQL, SQLAlchemy (Async), Alembic |
-| Real-Time Ledger | ⏳ Upcoming | Redis (Atomic Updates), Webhooks |
+| Real-Time Ledger | ⏳ Upcoming | Redis/Kafka (Atomic Updates), Webhooks |
 | Fraud Detection Engine | ⏳ Upcoming | XGBoost, Isolation Forest, Scikit-Learn |
 | Compliance Agent | ⏳ Upcoming | LangChain (RAG), LLMs, Vector DB |
 | Analytics Dashboard | ⏳ Upcoming | Streamlit, Plotly |
