@@ -1,41 +1,40 @@
-# 🛡️ PaySentry Core  
-### Real-Time Payment Intelligence & Processing Platform
+# 🛡️ PaySentry
 
-![Status](https://img.shields.io/badge/status-active%20development-yellow)
-![License](https://img.shields.io/badge/license-MIT-blue)
+### Real-Time Payment Intelligence & Compliance Platform
 
-**PaySentry Core** is a high-performance fintech backend designed to process transactions at scale while delivering **real-time fraud detection** and **compliance intelligence**.
+**PaySentry** is a production-grade fintech ecosystem capable of processing transactions at scale, detecting fraud in real-time (<100ms), and automating regulatory compliance.
 
-Currently in the **API Development Phase**, the system simulates modern banking architecture with:
-- **Sub-millisecond response times**
-- **Strict financial data validation**
-- **An extensible foundation for future ML integration**
+The system evolves through three distinct phases: **Foundation (Core Payments)**, **Intelligence (ML Fraud Detection)**, and **Production (GenAI Compliance Agents)**.
 
 ---
 
 ## 🚀 Key Features
 
-### ✅ Currently Implemented (Foundation Layer)
+### ✅ Phase 1: Core Transaction Engine (Foundation)
 
-- **High-Performance API**  
-  Built on **FastAPI (ASGI)**, optimized for high concurrency and low latency.
+* **High-Performance API:** Built on **FastAPI (ASGI)** for sub-millisecond response times.
+* **Real-Time Ledger:** Atomic balance updates using **Redis Streams & Lua Scripts** to prevent race conditions.
+* **Strict Financial Validation:** Uses Python’s `Decimal` and **Pydantic V2** for 100% type-safe financial data.
+* **Merchant Portal:** React + Mantine UI dashboard for merchants to view balances and generate payment links.
 
-- **Financial Precision**  
-  Uses Python’s `Decimal` type and **strictly typed Pydantic V2 models** to prevent floating-point errors and ensure data integrity.
+### ✅ Phase 2: Fraud Intelligence (ML & Graph)
 
-- **Type Safety**  
-  100% type-hinted codebase for reliability and auto-generated documentation.
+* **Hybrid Fraud Detection:** Ensemble model using **XGBoost** (Supervised) and **Isolation Forest** (Unsupervised).
+* **Graph Network Analysis:** **NetworkX** integration to detect circular money laundering schemes and fraud rings.
+* **Explainable AI (XAI):** Real-time **SHAP** value generation to explain *why* a transaction was blocked (Critical for RBI compliance).
+* **Drift Monitoring:** **EvidentlyAI** integration to track model performance and data drift in production.
 
-- **Interactive Documentation**  
-  Automatic **Swagger UI** available at `/docs` for instant API testing.
+### ✅ Phase 3: Compliance Agent (GenAI)
 
-- **Professional Workflow**  
-  Feature-branch Git workflow with **Conventional Commits**.
+* **ComplianceGPT:** A **LangGraph** autonomous agent that plans and executes compliance tasks.
+* **RAG Architecture:** Vector search (**ChromaDB**) over RBI/NPCI Master Circulars for accurate regulatory answers.
+* **Tool-Use Capabilities:** Agent can query SQL databases, analyze fraud graphs, and generate reports via natural language.
 
 ---
 
-## 🚧 Roadmap & Upcoming Modules
+## 🚧 Development Roadmap
 
+<<<<<<< HEAD
 | Module | Status | Technology Stack |
 |------|-------|------------------|
 | Core Transaction Engine | 🟡 In Progress | FastAPI, Pydantic, Python 3.11+ |
@@ -44,47 +43,89 @@ Currently in the **API Development Phase**, the system simulates modern banking 
 | Fraud Detection Engine | ⏳ Upcoming | XGBoost, Isolation Forest, Scikit-Learn |
 | Compliance Agent | ⏳ Upcoming | LangChain (RAG), LLMs, Vector DB |
 | Analytics Dashboard | ⏳ Upcoming | Streamlit, Plotly |
+=======
+| Phase | Module | Status | Technology Stack |
+| --- | --- | --- | --- |
+| **1** | **Transaction Engine** | 🟡 In Progress | FastAPI, PostgreSQL (AsyncPG), Docker |
+| **1** | **Real-Time Ledger** | ⏳ Upcoming | Redis Streams, Lua Scripts, Webhooks |
+| **1** | **Merchant Portal** | ⏳ Upcoming | React, TypeScript, Mantine UI, TanStack Query |
+| **2** | **Fraud Engine** | ⏳ Upcoming | XGBoost, Isolation Forest, Scikit-Learn |
+| **2** | **Graph Brain** | ⏳ Upcoming | NetworkX (Louvain Algorithm), Polars |
+| **2** | **Ops Dashboard** | ⏳ Upcoming | Streamlit, Plotly, EvidentlyAI |
+| **3** | **Compliance Agent** | ⏳ Upcoming | LangGraph, OpenAI/Groq, RAGAS |
+| **3** | **Knowledge Base** | ⏳ Upcoming | ChromaDB, HuggingFace Embeddings |
+>>>>>>> d4a574ceb89cfaf13e4c18d26c1009ebe5b5cf5a
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Language:** Python 3.11+
-- **Framework:** FastAPI
-- **Server:** Uvicorn (ASGI)
-- **Validation:** Pydantic V2
-- **Environment:** Docker, WSL2
-- **Package Manager:** `uv` (Fast Python package installer)
+### Backend & Infrastructure
+
+* **Language:** Python 3.11+
+* **Framework:** FastAPI (ASGI)
+* **Database:** PostgreSQL (Storage), Redis (State/Caching)
+* **DevOps:** Docker, GitHub Actions, Railway/Vercel
+
+### Machine Learning (Fraud)
+
+* **Models:** XGBoost, Isolation Forest
+* **Graph Analytics:** NetworkX
+* **Data Processing:** Polars, Airflow
+* **Explainability:** SHAP
+* **Monitoring:** EvidentlyAI
+
+### Generative AI (Compliance)
+
+* **Orchestration:** LangChain, LangGraph
+* **Vector DB:** ChromaDB / Qdrant
+* **Evaluation:** RAGAS
+* **LLM:** OpenAI GPT-4o / Groq (Llama 3)
 
 ---
 
 ## ⚡ Quick Start
 
 ### 1️⃣ Clone the Repository
+
 ```bash
-git clone https://github.com/YOUR_USERNAME/paysentry-core.git
-cd paysentry-core
+git clone https://github.com/YOUR_USERNAME/paysentry.git
+cd paysentry
+
 ```
 
 ### 2️⃣ Set Up Environment
+
 ```bash
-# Using uv (Recommended)
+# Using uv (Recommended for speed)
 uv venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-uv pip install fastapi uvicorn pydantic[email]
+uv pip install -r requirements.txt
+
 ```
 
-### 3️⃣ Run the Server
+### 3️⃣ Start Infrastructure
+
 ```bash
-uvicorn app.main:app --reload # Start the FastAPI development server with hot reload
+docker-compose up -d  # Starts PostgreSQL and Redis
+
 ```
 
-### 4️⃣ Explore the API
-Open your browser and navigate to: http://127.0.0.1:8000/docs
+### 4️⃣ Run the Server
 
-This launches the interactive Swagger UI for testing and exploration.
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+```
+
+### 5️⃣ Explore the Ecosystem
+
+* **API Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+* **Merchant Portal:** [http://127.0.0.1:3000](https://www.google.com/search?q=http://127.0.0.1:3000) (Requires React setup)
+* **Fraud Dashboard:** [http://127.0.0.1:8501](https://www.google.com/search?q=http://127.0.0.1:8501) (Requires Streamlit setup)
 
 ---
 
 ### 📄 License
+
 This project is licensed under the MIT License.
