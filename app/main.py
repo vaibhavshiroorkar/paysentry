@@ -14,7 +14,7 @@ def health_check():
     return {
         "status": "System Online 🟢", 
         "version": "1.0",
-        "database": settings.DATABASE_URL  # Temporary debug line
+        # "database": settings.DATABASE_URL  # Temporary debug line
     }
 
 # We will uncomment this LATER when we actually create the transactions file
