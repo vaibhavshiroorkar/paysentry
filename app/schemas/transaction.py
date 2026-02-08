@@ -1,32 +1,37 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 from typing import Optional
 from datetime import datetime
 from enum import Enum
+from uuid import UUID
 
+# 1. Enums (Good practice to keep these!)
 class TransactionStatus(str, Enum):
-    PENDING = "PENDING"
-    COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
-class TransactionType(str, Enum):
-    UPI = "UPI"
-    CARD = "CARD"
-    NETBANKING = "NETBANKING"
+class TransactionCurrency(str, Enum):
+    USD = "USD"
+    INR = "INR"
+    EUR = "EUR"
 
-class TransactionCreate(BaseModel):
-    type: TransactionType = TransactionType.UPI
-    amount: Decimal = Field(..., gt=0, le=100000,decimal_places=2)
-    currency: str = "INR"
-    description: Optional[str] = None
+# 2. Base Schema (Shared fields)
+class TransactionBase(BaseModel):
+    amount: Decimal = Field(..., gt=0, le=100000, decimal_places=2)
+    currency: TransactionCurrency = TransactionCurrency.USD
+    user_id: UUID  # <--- CRITICAL: We need to know WHO is paying!
 
-class TransactionResponse(BaseModel):
-    type: TransactionType
-    txn_id: str
-    status: TransactionStatus
-    amount: Decimal
-    currency: str
+# 3. Input (What the user sends)
+class TransactionCreate(TransactionBase):
+    pass 
+
+# 4. Output (What we send back)
+class TransactionResponse(TransactionBase):
+    id: UUID          # Matches DB column 'id'
+    status: str       # Matches DB column 'status'
+    risk_score: int   # Matches DB column 'risk_score'
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    # New Pydantic v2 Config
+    model_config = ConfigDict(from_attributes=True)
