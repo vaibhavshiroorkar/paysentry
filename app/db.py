@@ -11,7 +11,7 @@ SCHEMA_LOCK_ID = 727_001
 
 
 async def _init_connection(conn: asyncpg.Connection) -> None:
-    await conn.set_type_codec("jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
+    await conn.set_type_codec("json", encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
 
 
 async def create_pool(settings: Settings) -> asyncpg.Pool:

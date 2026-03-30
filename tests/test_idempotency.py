@@ -10,7 +10,7 @@ async def test_retry_replays_the_first_response_and_moves_money_once(client):
     retry = await transfer(client, a, b, 300, key=key)
 
     assert first.status_code == retry.status_code == 201
-    assert retry.json() == first.json()
+    assert retry.content == first.content
     assert "Idempotent-Replayed" not in first.headers
     assert retry.headers["Idempotent-Replayed"] == "true"
     assert await balance(client, a) == 700

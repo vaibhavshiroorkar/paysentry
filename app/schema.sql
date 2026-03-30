@@ -34,9 +34,10 @@ CREATE TABLE IF NOT EXISTS transfers (
     -- session can see it, because the row commits with its final status.
     status           text NOT NULL CHECK (status IN ('PROCESSING', 'SUCCEEDED', 'FAILED')),
     failure_reason   text,
-    -- The exact response sent the first time, replayed on retries.
+    -- The exact response sent the first time, replayed on retries. json, not
+    -- jsonb, because jsonb reorders keys and the replay must match byte for byte.
     response_code    int,
-    response_body    jsonb,
+    response_body    json,
     created_at       timestamptz NOT NULL DEFAULT now(),
     CHECK (from_account_id <> to_account_id)
 );
