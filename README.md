@@ -104,6 +104,10 @@ tests/
   test_concurrency.py   duplicate retries, double spend, deadlock
 ```
 
+## History
+
+`prototype/` holds the first version of PaySentry (January to February 2026), a payment fraud detection service built on FastAPI and SQLAlchemy. The current code is a rebuild from October 2026 that focuses on ledger correctness under concurrency.
+
 ## Roadmap
 
 - Gateway orchestration: mock payment gateways with set latency and failure rates, a visible `PROCESSING` state, success-rate routing, a circuit breaker and failover.
