@@ -16,10 +16,14 @@ class AccountCreate(BaseModel):
 
     @field_validator("owner_id")
     @classmethod
-    def not_system_owner(cls, value: str) -> str:
-        if value.startswith("system:"):
-            raise ValueError("owner_id may not start with 'system:'")
+    def not_reserved_owner(cls, value: str) -> str:
+        if value.startswith(("system:", "merchant:")):
+            raise ValueError("owner_id may not start with 'system:' or 'merchant:'")
         return value
+
+
+class MerchantCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
 
 
 class TopUpCreate(BaseModel):

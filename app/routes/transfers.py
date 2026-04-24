@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from app import ledger
+from app.auth import require_admin
 from app.errors import NotFound
 from app.idempotency import idempotency_key
 from app.models import TransferCreate
 
-router = APIRouter(prefix="/transfers", tags=["transfers"])
+router = APIRouter(prefix="/transfers", tags=["transfers"], dependencies=[Depends(require_admin)])
 
 
 def posting_response(result: ledger.PostingResult) -> JSONResponse:

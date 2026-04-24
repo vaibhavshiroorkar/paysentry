@@ -12,14 +12,27 @@ CREATE TABLE IF NOT EXISTS accounts (
     CONSTRAINT balance_not_negative CHECK (allow_negative OR balance_minor >= 0)
 );
 
--- One funding account per currency. Top-ups are transfers out of it, so the
--- sum of all balances in a currency is always zero.
-CREATE UNIQUE INDEX IF NOT EXISTS one_funding_account_per_currency
-    ON accounts (currency) WHERE owner_id = 'system:funding';
+-- System and merchant owners hold exactly one account per currency.
+CREATE UNIQUE INDEX IF NOT EXISTS one_account_per_owner_currency
+    ON accounts (owner_id, currency)
+    WHERE owner_id LIKE 'system:%' OR owner_id LIKE 'merchant:%';
 
+-- system:funding pays for top-ups. system:gateway_clearing stands for money
+-- the card gateways owe us: captures draw from it, refunds return to it.
+-- Both may go negative, so the sum of all balances in a currency stays zero.
 INSERT INTO accounts (owner_id, currency, allow_negative)
-VALUES ('system:funding', 'INR', true), ('system:funding', 'USD', true)
+VALUES ('system:funding', 'INR', true), ('system:funding', 'USD', true),
+       ('system:gateway_clearing', 'INR', true), ('system:gateway_clearing', 'USD', true)
 ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS merchants (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            text NOT NULL,
+    -- SHA-256 of the secret key. The key itself is shown once and never stored.
+    api_key_hash    text NOT NULL UNIQUE,
+    api_key_prefix  text NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS transfers (
     id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),

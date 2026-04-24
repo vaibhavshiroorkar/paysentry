@@ -48,6 +48,21 @@ async def transfer(
     )
 
 
+async def create_merchant(client: httpx.AsyncClient, name: str = "Acme") -> tuple[str, str]:
+    """Return (merchant id, secret API key)."""
+    response = await client.post("/merchants", json={"name": name})
+    assert response.status_code == 201, response.text
+    body = response.json()
+    return body["id"], body["api_key"]
+
+
+def merchant_headers(api_key: str, idempotency_key: str | None = None) -> dict[str, str]:
+    headers = {"Authorization": f"Bearer {api_key}"}
+    if idempotency_key is not None:
+        headers["Idempotency-Key"] = idempotency_key
+    return headers
+
+
 async def balance(client: httpx.AsyncClient, account_id: str) -> int:
     response = await client.get(f"/accounts/{account_id}")
     assert response.status_code == 200, response.text

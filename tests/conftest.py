@@ -14,6 +14,7 @@ TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql://paysentry:paysentry@localhost:5432/paysentry_test"
 )
 TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/1")
+ADMIN_KEY = "test-admin-key"
 
 
 async def _create_database_if_missing(url: str) -> None:
@@ -48,8 +49,9 @@ async def _reset_state() -> None:
 async def make_client():
     """Build an app on a fresh database. Overrides go to Settings.
 
-    By default the rate limit is too high to matter, and every client checks
-    after the test that the ledger still reconciles.
+    By default the rate limit is too high to matter, every request carries the
+    admin key, and every client checks after the test that the ledger still
+    reconciles.
     """
     stack = AsyncExitStack()
     to_reconcile = []
@@ -60,13 +62,18 @@ async def make_client():
             "redis_url": TEST_REDIS_URL,
             "rate_limit_capacity": 100_000,
             "rate_limit_refill_per_sec": 100_000,
+            "admin_api_key": ADMIN_KEY,
         }
         settings = Settings(_env_file=None, **(values | overrides))
         await _reset_state()
         app = create_app(settings)
         await stack.enter_async_context(app.router.lifespan_context(app))
         client = await stack.enter_async_context(
-            httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+            httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app),
+                base_url="http://test",
+                headers={"X-Admin-Key": ADMIN_KEY},
+            )
         )
         if check_reconciliation:
             to_reconcile.append(client)

@@ -7,7 +7,7 @@ from app.config import Settings
 from app.db import apply_schema, create_pool
 from app.errors import register_error_handlers
 from app.ratelimit import RateLimiter
-from app.routes import accounts, ops, transfers
+from app.routes import accounts, merchants, ops, transfers
 
 
 @asynccontextmanager
@@ -34,6 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="PaySentry Core", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings or Settings()
     register_error_handlers(app)
+    app.include_router(merchants.router)
     app.include_router(accounts.router)
     app.include_router(transfers.router)
     app.include_router(ops.router)

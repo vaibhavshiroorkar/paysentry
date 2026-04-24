@@ -24,6 +24,11 @@ class NotFound(ApiError):
     code = "not_found"
 
 
+class Unauthorized(ApiError):
+    status_code = 401
+    code = "unauthorized"
+
+
 class MissingIdempotencyKey(ApiError):
     status_code = 400
     code = "missing_idempotency_key"

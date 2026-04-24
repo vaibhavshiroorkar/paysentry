@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from redis.exceptions import RedisError
 
+from app.auth import require_admin
 from app.reconcile import reconcile
 
 router = APIRouter(tags=["ops"])
@@ -25,7 +26,7 @@ async def health(request: Request) -> JSONResponse:
     return JSONResponse(status_code=200 if healthy else 503, content=checks)
 
 
-@router.get("/internal/reconciliation")
+@router.get("/internal/reconciliation", dependencies=[Depends(require_admin)])
 async def reconciliation(request: Request) -> dict:
     mismatches = await reconcile(request.app.state.pool)
     return {"ok": not mismatches, "mismatches": mismatches}

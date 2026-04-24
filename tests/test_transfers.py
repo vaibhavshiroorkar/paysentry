@@ -20,9 +20,10 @@ async def test_unknown_account_is_404(client):
     assert response.json()["error"]["code"] == "not_found"
 
 
-async def test_owner_cannot_claim_system_prefix(client):
-    response = await client.post("/accounts", json={"owner_id": "system:me", "currency": "INR"})
-    assert response.status_code == 422
+async def test_owner_cannot_claim_a_reserved_prefix(client):
+    for owner in ["system:me", "merchant:me"]:
+        response = await client.post("/accounts", json={"owner_id": owner, "currency": "INR"})
+        assert response.status_code == 422, owner
 
 
 async def test_top_up_credits_account(client):

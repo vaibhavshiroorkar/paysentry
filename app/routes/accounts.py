@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 
 from app import ledger
+from app.auth import require_admin
 from app.errors import NotFound, SystemAccountNotAllowed
 from app.idempotency import idempotency_key
 from app.models import AccountCreate, TopUpCreate
 from app.routes.transfers import posting_response
 
-router = APIRouter(prefix="/accounts", tags=["accounts"])
+router = APIRouter(prefix="/accounts", tags=["accounts"], dependencies=[Depends(require_admin)])
 
 
 def account_body(row) -> dict:
