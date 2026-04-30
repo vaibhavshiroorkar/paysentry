@@ -6,15 +6,10 @@ from fastapi.responses import JSONResponse
 from app import ledger
 from app.auth import require_admin
 from app.errors import NotFound
-from app.idempotency import idempotency_key
+from app.idempotency import idempotency_key, to_response
 from app.models import TransferCreate
 
 router = APIRouter(prefix="/transfers", tags=["transfers"], dependencies=[Depends(require_admin)])
-
-
-def posting_response(result: ledger.PostingResult) -> JSONResponse:
-    headers = {"Idempotent-Replayed": "true"} if result.replayed else {}
-    return JSONResponse(status_code=result.status_code, content=result.body, headers=headers)
 
 
 @router.post("")
@@ -34,7 +29,7 @@ async def create_transfer(
         amount_minor=body.amount_minor,
         currency=body.currency,
     )
-    return posting_response(result)
+    return to_response(result)
 
 
 @router.get("/{transfer_id}")

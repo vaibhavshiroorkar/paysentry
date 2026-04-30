@@ -6,9 +6,8 @@ from fastapi.responses import JSONResponse
 from app import ledger
 from app.auth import require_admin
 from app.errors import NotFound, SystemAccountNotAllowed
-from app.idempotency import idempotency_key
+from app.idempotency import idempotency_key, to_response
 from app.models import AccountCreate, TopUpCreate
-from app.routes.transfers import posting_response
 
 router = APIRouter(prefix="/accounts", tags=["accounts"], dependencies=[Depends(require_admin)])
 
@@ -87,10 +86,10 @@ async def top_up(
     result = await ledger.post_transfer(
         state.pool,
         idempotency_key=key,
-        from_account_id=await ledger.funding_account_id(state.pool, account["currency"]),
+        from_account_id=await ledger.account_id_for(state.pool, "system:funding", account["currency"]),
         to_account_id=account_id,
         amount_minor=body.amount_minor,
         currency=account["currency"],
         allow_system_source=True,
     )
-    return posting_response(result)
+    return to_response(result)

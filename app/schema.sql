@@ -34,6 +34,20 @@ CREATE TABLE IF NOT EXISTS merchants (
     created_at      timestamptz NOT NULL DEFAULT now()
 );
 
+-- Idempotency for merchant requests. Transfers keep their own key column.
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    merchant_id     uuid NOT NULL REFERENCES merchants (id),
+    key             text NOT NULL,
+    -- SHA-256 of method, path and body (cards reduced to brand, last 4, expiry).
+    request_hash    text NOT NULL,
+    state           text NOT NULL CHECK (state IN ('in_progress', 'completed')),
+    response_code   int,
+    response_body   json,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    completed_at    timestamptz,
+    PRIMARY KEY (merchant_id, key)
+);
+
 CREATE TABLE IF NOT EXISTS transfers (
     id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     idempotency_key  text NOT NULL UNIQUE,

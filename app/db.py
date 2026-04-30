@@ -10,7 +10,7 @@ SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 SCHEMA_LOCK_ID = 727_001
 
 
-async def _init_connection(conn: asyncpg.Connection) -> None:
+async def init_connection(conn: asyncpg.Connection) -> None:
     await conn.set_type_codec("json", encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
 
 
@@ -19,7 +19,7 @@ async def create_pool(settings: Settings) -> asyncpg.Pool:
         settings.database_url,
         min_size=2,
         max_size=settings.db_pool_size,
-        init=_init_connection,
+        init=init_connection,
     )
 
 

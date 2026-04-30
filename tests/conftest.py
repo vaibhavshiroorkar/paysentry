@@ -8,6 +8,7 @@ import pytest
 from redis.asyncio import Redis
 
 from app.config import Settings
+from app.db import init_connection
 from app.main import create_app
 
 TEST_DATABASE_URL = os.environ.get(
@@ -96,5 +97,6 @@ async def client(make_client):
 @pytest.fixture
 async def db():
     conn = await asyncpg.connect(TEST_DATABASE_URL)
+    await init_connection(conn)
     yield conn
     await conn.close()

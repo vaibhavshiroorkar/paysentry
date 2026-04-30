@@ -34,6 +34,11 @@ class MissingIdempotencyKey(ApiError):
     code = "missing_idempotency_key"
 
 
+class RequestInProgress(ApiError):
+    status_code = 409
+    code = "request_in_progress"
+
+
 class IdempotencyKeyReused(ApiError):
     status_code = 422
     code = "idempotency_key_reused"
