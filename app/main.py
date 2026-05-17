@@ -6,8 +6,9 @@ from redis.asyncio import Redis
 from app.config import Settings
 from app.db import apply_schema, create_pool
 from app.errors import register_error_handlers
+from app.processor import FakeProcessor
 from app.ratelimit import RateLimiter
-from app.routes import accounts, merchants, ops, transfers
+from app.routes import accounts, merchants, ops, payments, transfers
 
 
 @asynccontextmanager
@@ -24,6 +25,7 @@ async def lifespan(app: FastAPI):
         app.state.pool = pool
         app.state.redis = redis
         app.state.limiter = RateLimiter(redis, settings)
+        app.state.processor = FakeProcessor(settings.fake_processor_delay_ms)
         yield
     finally:
         await redis.aclose()
@@ -35,6 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings or Settings()
     register_error_handlers(app)
     app.include_router(merchants.router)
+    app.include_router(payments.router)
     app.include_router(accounts.router)
     app.include_router(transfers.router)
     app.include_router(ops.router)

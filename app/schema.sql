@@ -91,3 +91,44 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE TRIGGER ledger_entries_append_only
     BEFORE UPDATE OR DELETE ON ledger_entries
     FOR EACH ROW EXECUTE FUNCTION reject_ledger_change();
+
+CREATE TABLE IF NOT EXISTS payments (
+    id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    merchant_id            uuid NOT NULL REFERENCES merchants (id),
+    amount_minor           bigint NOT NULL CHECK (amount_minor > 0),
+    currency               char(3) NOT NULL,
+    capture_method         text NOT NULL CHECK (capture_method IN ('automatic', 'manual')),
+    -- See docs/design/payments.md for the state machine.
+    status                 text NOT NULL CHECK (status IN (
+                               'processing', 'authorized', 'capture_pending', 'captured',
+                               'void_pending', 'voided', 'failed', 'refunded')),
+    amount_captured        bigint NOT NULL DEFAULT 0,
+    amount_refunded        bigint NOT NULL DEFAULT 0,
+    -- Set only while a capture waits on the processor.
+    pending_capture_minor  bigint,
+    -- Never the full card number. See docs/design/payments.md, "Card data".
+    card_brand             text NOT NULL,
+    card_last4             char(4) NOT NULL,
+    processor_reference    text,
+    failure_reason         text,
+    created_at             timestamptz NOT NULL DEFAULT now(),
+    updated_at             timestamptz NOT NULL DEFAULT now(),
+    CHECK (amount_captured <= amount_minor),
+    CHECK (amount_refunded <= amount_captured),
+    CHECK (pending_capture_minor IS NULL OR pending_capture_minor BETWEEN 1 AND amount_minor)
+);
+
+CREATE INDEX IF NOT EXISTS payments_merchant_idx ON payments (merchant_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS refunds (
+    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    payment_id      uuid NOT NULL REFERENCES payments (id),
+    amount_minor    bigint NOT NULL CHECK (amount_minor > 0),
+    -- A pending refund reserves its amount until the processor answers.
+    status          text NOT NULL CHECK (status IN ('pending', 'succeeded', 'failed')),
+    failure_reason  text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS refunds_payment_idx ON refunds (payment_id, created_at);

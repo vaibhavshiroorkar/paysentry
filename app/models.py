@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.cards import Card
+
 Currency = Literal["INR", "USD"]
 
 # Strict so that "100" and 100.0 are rejected rather than coerced. The upper
@@ -41,3 +43,19 @@ class TransferCreate(BaseModel):
         if self.from_account_id == self.to_account_id:
             raise ValueError("from_account_id and to_account_id must differ")
         return self
+
+
+class PaymentCreate(BaseModel):
+    amount_minor: AmountMinor
+    currency: Currency
+    capture_method: Literal["automatic", "manual"]
+    card: Card
+
+
+class CaptureRequest(BaseModel):
+    # Leave out to capture the full authorized amount.
+    amount_minor: AmountMinor | None = None
+
+
+class RefundCreate(BaseModel):
+    amount_minor: AmountMinor
