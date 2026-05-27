@@ -50,6 +50,30 @@ class CurrencyMismatch(ApiError):
     code = "currency_mismatch"
 
 
+class InvalidState(ApiError):
+    status_code = 409
+    code = "invalid_state"
+
+
+class CaptureExceedsAuthorized(ApiError):
+    status_code = 422
+    code = "capture_exceeds_authorized"
+
+
+class ProcessorDeclined(ApiError):
+    status_code = 402
+    code = "processor_declined"
+
+    def __init__(self, decline_code: str):
+        super().__init__("The processor declined this operation")
+        self.decline_code = decline_code
+
+    def body(self) -> dict:
+        body = super().body()
+        body["error"]["decline_code"] = self.decline_code
+        return body
+
+
 class SystemAccountNotAllowed(ApiError):
     status_code = 403
     code = "system_account_not_allowed"

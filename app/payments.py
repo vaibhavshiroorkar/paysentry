@@ -11,7 +11,7 @@ import asyncpg
 
 from app import idempotency, ledger
 from app.auth import Merchant, merchant_owner
-from app.errors import NotFound
+from app.errors import ApiError, CaptureExceedsAuthorized, InvalidState, NotFound, ProcessorDeclined
 from app.idempotency import StoredResponse
 from app.models import PaymentCreate
 from app.processor import FakeProcessor
@@ -135,3 +135,111 @@ async def get_payment(pool: asyncpg.Pool, merchant: Merchant, payment_id: UUID) 
                 "SELECT * FROM refunds WHERE payment_id = $1 ORDER BY created_at, id", payment_id
             )
     return payment_body(payment, refunds)
+
+
+async def _refusal(conn, merchant: Merchant, payment_id: UUID, capture_amount: int | None = None) -> ApiError:
+    """Why a conditional transition matched no row."""
+    row = await conn.fetchrow(
+        "SELECT status, amount_minor FROM payments WHERE id = $1 AND merchant_id = $2", payment_id, merchant.id
+    )
+    if row is None:
+        return NotFound("Payment not found")
+    if row["status"] == "authorized" and capture_amount is not None and capture_amount > row["amount_minor"]:
+        return CaptureExceedsAuthorized(f"Capture amount exceeds the authorized {row['amount_minor']}")
+    return InvalidState(f"Payment is {row['status']}")
+
+
+async def capture_payment(
+    pool: asyncpg.Pool, processor: FakeProcessor, merchant: Merchant, payment_id: UUID, key: str,
+    amount_minor: int | None,
+) -> StoredResponse:
+    async with pool.acquire() as conn, conn.transaction():
+        stored = await idempotency.claim(
+            conn, merchant_id=merchant.id, key=key, method="POST", path=f"/payments/{payment_id}/capture",
+            fingerprint={"amount_minor": amount_minor},
+        )
+        if stored is not None:
+            return stored
+        # The status guard is the whole concurrency story: a second capture
+        # waits for this row lock, then re-checks the WHERE against the new
+        # row, finds capture_pending, and matches nothing.
+        payment = await conn.fetchrow(
+            """
+            UPDATE payments
+            SET status = 'capture_pending', pending_capture_minor = COALESCE($3, amount_minor), updated_at = now()
+            WHERE id = $1 AND merchant_id = $2 AND status = 'authorized'
+              AND COALESCE($3, amount_minor) <= amount_minor
+            RETURNING *
+            """,
+            payment_id, merchant.id, amount_minor,
+        )
+        if payment is None:
+            raise await _refusal(conn, merchant, payment_id, amount_minor)
+
+    result = await processor.capture(
+        reference=payment["processor_reference"], amount_minor=payment["pending_capture_minor"]
+    )
+
+    async with pool.acquire() as conn, conn.transaction():
+        if result.approved:
+            payment = await conn.fetchrow(
+                """
+                UPDATE payments
+                SET status = 'captured', amount_captured = pending_capture_minor,
+                    pending_capture_minor = NULL, updated_at = now()
+                WHERE id = $1 AND status = 'capture_pending'
+                RETURNING *
+                """,
+                payment_id,
+            )
+            await post_capture(conn, payment, payment["amount_captured"])
+            status_code, body = 200, payment_body(payment)
+        else:
+            await conn.execute(
+                """
+                UPDATE payments SET status = 'authorized', pending_capture_minor = NULL, updated_at = now()
+                WHERE id = $1 AND status = 'capture_pending'
+                """,
+                payment_id,
+            )
+            status_code, body = 402, ProcessorDeclined(result.decline_code).body()
+        return await idempotency.complete(conn, merchant_id=merchant.id, key=key, status_code=status_code, body=body)
+
+
+async def void_payment(
+    pool: asyncpg.Pool, processor: FakeProcessor, merchant: Merchant, payment_id: UUID, key: str
+) -> StoredResponse:
+    async with pool.acquire() as conn, conn.transaction():
+        stored = await idempotency.claim(
+            conn, merchant_id=merchant.id, key=key, method="POST", path=f"/payments/{payment_id}/void",
+            fingerprint={},
+        )
+        if stored is not None:
+            return stored
+        payment = await conn.fetchrow(
+            """
+            UPDATE payments SET status = 'void_pending', updated_at = now()
+            WHERE id = $1 AND merchant_id = $2 AND status = 'authorized'
+            RETURNING *
+            """,
+            payment_id, merchant.id,
+        )
+        if payment is None:
+            raise await _refusal(conn, merchant, payment_id)
+
+    result = await processor.void(reference=payment["processor_reference"])
+
+    async with pool.acquire() as conn, conn.transaction():
+        payment = await conn.fetchrow(
+            """
+            UPDATE payments SET status = $2, updated_at = now()
+            WHERE id = $1 AND status = 'void_pending'
+            RETURNING *
+            """,
+            payment_id, "voided" if result.approved else "authorized",
+        )
+        if result.approved:
+            status_code, body = 200, payment_body(payment)
+        else:
+            status_code, body = 402, ProcessorDeclined(result.decline_code).body()
+        return await idempotency.complete(conn, merchant_id=merchant.id, key=key, status_code=status_code, body=body)
