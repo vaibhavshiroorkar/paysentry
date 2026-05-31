@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from app import payments
 from app.auth import Merchant, current_merchant, merchant_owner
 from app.idempotency import idempotency_key, to_response
-from app.models import CaptureRequest, PaymentCreate
+from app.models import CaptureRequest, PaymentCreate, RefundCreate
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -54,3 +54,18 @@ async def void_payment(
     state = request.app.state
     await state.limiter.check(merchant_owner(merchant.id))
     return to_response(await payments.void_payment(state.pool, state.processor, merchant, payment_id, key))
+
+
+@router.post("/{payment_id}/refunds")
+async def refund_payment(
+    payment_id: UUID,
+    body: RefundCreate,
+    request: Request,
+    merchant: Merchant = Depends(current_merchant),
+    key: str = Depends(idempotency_key),
+) -> JSONResponse:
+    state = request.app.state
+    await state.limiter.check(merchant_owner(merchant.id))
+    return to_response(
+        await payments.refund_payment(state.pool, state.processor, merchant, payment_id, key, body.amount_minor)
+    )

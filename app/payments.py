@@ -11,7 +11,14 @@ import asyncpg
 
 from app import idempotency, ledger
 from app.auth import Merchant, merchant_owner
-from app.errors import ApiError, CaptureExceedsAuthorized, InvalidState, NotFound, ProcessorDeclined
+from app.errors import (
+    ApiError,
+    CaptureExceedsAuthorized,
+    InvalidState,
+    NotFound,
+    ProcessorDeclined,
+    RefundExceedsAvailable,
+)
 from app.idempotency import StoredResponse
 from app.models import PaymentCreate
 from app.processor import FakeProcessor
@@ -243,3 +250,76 @@ async def void_payment(
         else:
             status_code, body = 402, ProcessorDeclined(result.decline_code).body()
         return await idempotency.complete(conn, merchant_id=merchant.id, key=key, status_code=status_code, body=body)
+
+
+async def refund_payment(
+    pool: asyncpg.Pool, processor: FakeProcessor, merchant: Merchant, payment_id: UUID, key: str,
+    amount_minor: int,
+) -> StoredResponse:
+    async with pool.acquire() as conn, conn.transaction():
+        stored = await idempotency.claim(
+            conn, merchant_id=merchant.id, key=key, method="POST", path=f"/payments/{payment_id}/refunds",
+            fingerprint={"amount_minor": amount_minor},
+        )
+        if stored is not None:
+            return stored
+        # Refunds of one payment queue on this lock, so each one sees the
+        # reservations of the ones before it.
+        payment = await conn.fetchrow(
+            "SELECT * FROM payments WHERE id = $1 AND merchant_id = $2 FOR NO KEY UPDATE", payment_id, merchant.id
+        )
+        if payment is None:
+            raise NotFound("Payment not found")
+        if payment["status"] != "captured":
+            raise InvalidState(f"Payment is {payment['status']}")
+        pending = await conn.fetchval(
+            "SELECT COALESCE(SUM(amount_minor), 0) FROM refunds WHERE payment_id = $1 AND status = 'pending'",
+            payment_id,
+        )
+        available = payment["amount_captured"] - payment["amount_refunded"] - pending
+        if amount_minor > available:
+            raise RefundExceedsAvailable(f"Only {available} can be refunded right now")
+        refund = await conn.fetchrow(
+            "INSERT INTO refunds (payment_id, amount_minor, status) VALUES ($1, $2, 'pending') RETURNING *",
+            payment_id, amount_minor,
+        )
+
+    result = await processor.refund(reference=payment["processor_reference"], amount_minor=amount_minor)
+
+    async with pool.acquire() as conn, conn.transaction():
+        # Payment first, then the refund, then accounts: the global lock order.
+        await conn.execute("SELECT 1 FROM payments WHERE id = $1 FOR NO KEY UPDATE", payment_id)
+        if result.approved:
+            refund = await conn.fetchrow(
+                """
+                UPDATE refunds SET status = 'succeeded', updated_at = now()
+                WHERE id = $1 AND status = 'pending' RETURNING *
+                """,
+                refund["id"],
+            )
+            await conn.execute(
+                """
+                UPDATE payments
+                SET amount_refunded = amount_refunded + $2,
+                    status = CASE WHEN amount_refunded + $2 = amount_captured THEN 'refunded' ELSE status END,
+                    updated_at = now()
+                WHERE id = $1
+                """,
+                payment_id, amount_minor,
+            )
+            await _post(
+                conn, f"payment-refund:{refund['id']}", merchant_owner(merchant.id), CLEARING,
+                amount_minor, payment["currency"],
+            )
+        else:
+            # A failed refund stops counting as pending, which frees its amount.
+            refund = await conn.fetchrow(
+                """
+                UPDATE refunds SET status = 'failed', failure_reason = $2, updated_at = now()
+                WHERE id = $1 AND status = 'pending' RETURNING *
+                """,
+                refund["id"], result.decline_code,
+            )
+        return await idempotency.complete(
+            conn, merchant_id=merchant.id, key=key, status_code=201, body=refund_body(refund)
+        )

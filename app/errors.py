@@ -60,6 +60,11 @@ class CaptureExceedsAuthorized(ApiError):
     code = "capture_exceeds_authorized"
 
 
+class RefundExceedsAvailable(ApiError):
+    status_code = 422
+    code = "refund_exceeds_available"
+
+
 class ProcessorDeclined(ApiError):
     status_code = 402
     code = "processor_declined"
