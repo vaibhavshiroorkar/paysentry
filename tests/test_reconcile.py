@@ -3,7 +3,8 @@ import uuid
 import asyncpg
 import pytest
 
-from helpers import create_account, funded_account, transfer
+from helpers import create_account, create_merchant, funded_account, transfer
+from payment_helpers import captured_payment, refund
 
 
 async def test_reconciliation_is_clean_after_activity(client):
@@ -34,3 +35,17 @@ async def test_ledger_entries_are_append_only(client, db):
         await db.execute("UPDATE ledger_entries SET amount_minor = 1")
     with pytest.raises(asyncpg.RaiseError, match="append-only"):
         await db.execute("DELETE FROM ledger_entries")
+
+
+async def test_reconciliation_catches_payments_that_disagree_with_the_ledger(make_client, db):
+    client = await make_client(check_reconciliation=False)
+    _, key = await create_merchant(client)
+    capture_tampered = await captured_payment(client, key, 1_000)
+    refund_tampered = await captured_payment(client, key, 1_000)
+    await refund(client, key, refund_tampered, 300)
+
+    await db.execute("UPDATE payments SET amount_captured = 999 WHERE id = $1", uuid.UUID(capture_tampered))
+    await db.execute("UPDATE payments SET amount_refunded = 200 WHERE id = $1", uuid.UUID(refund_tampered))
+
+    report = (await client.get("/internal/reconciliation")).json()
+    assert {m["kind"] for m in report["mismatches"]} == {"payment_capture_mismatch", "payment_refund_mismatch"}

@@ -27,6 +27,27 @@ GROUP BY currency
 HAVING SUM(balance_minor) <> 0
 """
 
+# A payment's captured amount must equal its one capture posting.
+PAYMENT_CAPTURES = """
+SELECT p.id, p.amount_captured, COALESCE(t.amount_minor, 0) AS posted
+FROM payments p
+LEFT JOIN transfers t ON t.idempotency_key = 'payment-capture:' || p.id AND t.status = 'SUCCEEDED'
+WHERE p.amount_captured <> COALESCE(t.amount_minor, 0)
+"""
+
+# A payment's refunded amount must equal its succeeded refunds and their postings.
+PAYMENT_REFUNDS = """
+SELECT p.id, p.amount_refunded,
+       COALESCE(SUM(r.amount_minor) FILTER (WHERE r.status = 'succeeded'), 0) AS refunds_total,
+       COALESCE(SUM(t.amount_minor), 0) AS posted
+FROM payments p
+LEFT JOIN refunds r ON r.payment_id = p.id
+LEFT JOIN transfers t ON t.idempotency_key = 'payment-refund:' || r.id AND t.status = 'SUCCEEDED'
+GROUP BY p.id
+HAVING p.amount_refunded <> COALESCE(SUM(r.amount_minor) FILTER (WHERE r.status = 'succeeded'), 0)
+    OR p.amount_refunded <> COALESCE(SUM(t.amount_minor), 0)
+"""
+
 
 async def reconcile(pool: asyncpg.Pool) -> list[dict]:
     """Return every place where cached balances and the ledger disagree."""
@@ -52,6 +73,25 @@ async def reconcile(pool: asyncpg.Pool) -> list[dict]:
                         "status": row["status"],
                         "entry_count": row["entry_count"],
                         "entry_sum": row["entry_sum"],
+                    }
+                )
+            for row in await conn.fetch(PAYMENT_CAPTURES):
+                mismatches.append(
+                    {
+                        "kind": "payment_capture_mismatch",
+                        "payment_id": str(row["id"]),
+                        "amount_captured": row["amount_captured"],
+                        "posted": row["posted"],
+                    }
+                )
+            for row in await conn.fetch(PAYMENT_REFUNDS):
+                mismatches.append(
+                    {
+                        "kind": "payment_refund_mismatch",
+                        "payment_id": str(row["id"]),
+                        "amount_refunded": row["amount_refunded"],
+                        "refunds_total": row["refunds_total"],
+                        "posted": row["posted"],
                     }
                 )
             for row in await conn.fetch(CURRENCY_TOTALS):
