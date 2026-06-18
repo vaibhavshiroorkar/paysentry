@@ -28,6 +28,7 @@ services:
     environment:
       DATABASE_URL: postgresql://paysentry:paysentry@db:5432/paysentry
       REDIS_URL: redis://redis:6379/0
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key}
     ports:
       - "8000:8000"
     depends_on:
