@@ -82,9 +82,9 @@ class Connector(Protocol):
     name: str
     async def authorize(self, *, reference, amount_minor, currency, card, capture) -> GatewayResult
     async def lookup(self, *, reference) -> GatewayResult  # an authorization by our reference
-    async def capture(self, *, gateway_reference, reference, amount_minor) -> GatewayResult
+    async def capture(self, *, gateway_reference, reference, amount_minor, currency) -> GatewayResult
     async def void(self, *, gateway_reference, reference) -> GatewayResult
-    async def refund(self, *, gateway_reference, reference, amount_minor) -> GatewayResult
+    async def refund(self, *, gateway_reference, reference, amount_minor, currency) -> GatewayResult
 ```
 
 `GatewayResult` holds the outcome, the gateway's own id, the final charge status (`authorized` or `captured`) and a decline code.
