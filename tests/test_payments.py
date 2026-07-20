@@ -120,7 +120,7 @@ async def test_idempotency_keys_are_scoped_per_merchant(client):
 
 
 async def test_duplicate_sent_while_the_first_is_in_flight_gets_409(make_client):
-    client = await make_client(fake_processor_delay_ms=300)
+    client = await make_client(gateway_latency_ms=300)
     _, key = await create_merchant(client)
     idem = new_key()
 

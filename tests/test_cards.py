@@ -1,12 +1,8 @@
 import datetime as dt
-import time
-import uuid
-
 import pytest
 from pydantic import ValidationError
 
 from app.cards import Card, card_brand, luhn_valid
-from app.processor import FakeProcessor
 
 TEST_CARDS = [
     "4242424242424242",
@@ -76,64 +72,3 @@ def test_card_never_prints_its_number_or_cvc():
 
 def test_fingerprint_keeps_only_brand_last4_and_expiry():
     assert card().fingerprint() == {"brand": "visa", "last4": "4242", "exp_month": 12, "exp_year": 2030}
-
-
-async def authorize(processor: FakeProcessor, number: str, capture: bool = False):
-    return await processor.authorize(
-        payment_id=uuid.uuid4(), amount_minor=1_000, currency="INR", card=card(number), capture=capture
-    )
-
-
-async def test_processor_approves_an_ordinary_card():
-    result = await authorize(FakeProcessor(), "4242424242424242")
-    assert result.approved
-    assert result.reference.startswith("fake_ok_")
-
-
-@pytest.mark.parametrize(
-    "number, code", [("4000000000000002", "card_declined"), ("4000000000009995", "insufficient_funds")]
-)
-async def test_processor_declines_decline_cards(number, code):
-    result = await authorize(FakeProcessor(), number)
-    assert not result.approved
-    assert result.decline_code == code
-    assert result.reference is None
-
-
-async def test_capture_and_void_fail_for_the_capture_failure_card():
-    processor = FakeProcessor()
-    auth = await authorize(processor, "4000000000000341")
-    assert auth.approved
-
-    capture = await processor.capture(reference=auth.reference, amount_minor=1_000)
-    void = await processor.void(reference=auth.reference)
-
-    assert (capture.approved, capture.decline_code) == (False, "capture_declined")
-    assert (void.approved, void.decline_code) == (False, "void_declined")
-
-
-async def test_refunds_fail_for_the_refund_failure_card():
-    processor = FakeProcessor()
-    auth = await authorize(processor, "4000000000005126", capture=True)
-
-    refund = await processor.refund(reference=auth.reference, amount_minor=500)
-
-    assert auth.approved
-    assert (refund.approved, refund.decline_code) == (False, "refund_declined")
-
-
-async def test_ordinary_card_captures_voids_and_refunds():
-    processor = FakeProcessor()
-    auth = await authorize(processor, "4242424242424242")
-    for result in [
-        await processor.capture(reference=auth.reference, amount_minor=1_000),
-        await processor.void(reference=auth.reference),
-        await processor.refund(reference=auth.reference, amount_minor=1_000),
-    ]:
-        assert result.approved
-
-
-async def test_processor_delay_simulates_latency():
-    start = time.perf_counter()
-    await authorize(FakeProcessor(delay_ms=50), "4242424242424242")
-    assert time.perf_counter() - start >= 0.05

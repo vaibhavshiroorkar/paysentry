@@ -1,4 +1,12 @@
+from typing import Literal
+
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class GatewayConfig(BaseModel):
+    flavour: Literal["alpha", "beta"]
+    url: str
 
 
 class Settings(BaseSettings):
@@ -10,8 +18,16 @@ class Settings(BaseSettings):
     redis_timeout_sec: float = 0.5
     # Guards /merchants, /accounts, /transfers and /internal. Set a real secret outside development.
     admin_api_key: str = "dev-admin-key"
-    # Simulated network latency on every fake processor call.
-    fake_processor_delay_ms: int = 0
+
+    # See docs/design/gateways.md, "Settings".
+    gateways: dict[str, GatewayConfig] = {
+        "alpha": GatewayConfig(flavour="alpha", url="http://localhost:9001"),
+        "beta": GatewayConfig(flavour="beta", url="http://localhost:9002"),
+    }
+    default_gateway: str = "alpha"
+    gateway_timeout_sec: float = 2.0
+    recovery_after_sec: float = 60.0
+    recovery_interval_sec: float = 10.0
 
     # Token bucket per paying account: `capacity` requests in a burst,
     # then `refill_per_sec` requests per second after that.

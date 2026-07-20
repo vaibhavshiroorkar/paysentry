@@ -1,6 +1,6 @@
 """Requests that race on the same payment, against real Postgres.
 
-The fake processor waits 50 ms, so requests overlap while one of them is
+Each gateway call takes 50 ms, so requests overlap while one of them is
 between transaction A and transaction B.
 """
 
@@ -21,7 +21,7 @@ from payment_helpers import (
 
 
 async def test_concurrent_captures_succeed_exactly_once(make_client):
-    client = await make_client(fake_processor_delay_ms=50)
+    client = await make_client(gateway_latency_ms=50)
     _, key = await create_merchant(client)
     payment_id = await authorized_payment(client, key, 1_000)
 
@@ -32,7 +32,7 @@ async def test_concurrent_captures_succeed_exactly_once(make_client):
 
 
 async def test_capture_and_void_racing_have_one_winner(make_client):
-    client = await make_client(fake_processor_delay_ms=50)
+    client = await make_client(gateway_latency_ms=50)
     _, key = await create_merchant(client)
     payment_id = await authorized_payment(client, key, 1_000)
 
@@ -46,7 +46,7 @@ async def test_capture_and_void_racing_have_one_winner(make_client):
 
 
 async def test_concurrent_refunds_never_exceed_the_capture(make_client):
-    client = await make_client(fake_processor_delay_ms=50)
+    client = await make_client(gateway_latency_ms=50)
     _, key = await create_merchant(client)
     payment_id = await captured_payment(client, key, 1_000)
 

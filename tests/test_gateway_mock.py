@@ -223,3 +223,12 @@ async def test_beta_refuses_capture_for_the_capture_failure_card(beta):
         )
     ).json()
     assert (body["result"], body["state"], body["refusalReason"]) == ("REFUSED", "AUTHORISED", "capture_declined")
+
+
+async def test_beta_rejects_money_in_the_wrong_currency(beta):
+    client, _ = beta
+    payment_id = (await beta_payment(client, auto=True)).json()["paymentId"]
+    response = await client.post(
+        f"/api/payments/{payment_id}/refunds", json={"merchantRef": "r", "money": {"value": "1.00", "currency": "USD"}}
+    )
+    assert response.status_code == 400

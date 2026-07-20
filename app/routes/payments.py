@@ -20,7 +20,9 @@ async def create_payment(
 ) -> JSONResponse:
     state = request.app.state
     await state.limiter.check(merchant_owner(merchant.id))
-    return to_response(await payments.create_payment(state.pool, state.processor, merchant, key, body))
+    return to_response(await payments.create_payment(
+            state.pool, state.gateways, state.settings.default_gateway, merchant, key, body
+        ))
 
 
 @router.get("/{payment_id}")
@@ -40,7 +42,7 @@ async def capture_payment(
     await state.limiter.check(merchant_owner(merchant.id))
     amount = body.amount_minor if body else None
     return to_response(
-        await payments.capture_payment(state.pool, state.processor, merchant, payment_id, key, amount)
+        await payments.capture_payment(state.pool, state.gateways, merchant, payment_id, key, amount)
     )
 
 
@@ -53,7 +55,7 @@ async def void_payment(
 ) -> JSONResponse:
     state = request.app.state
     await state.limiter.check(merchant_owner(merchant.id))
-    return to_response(await payments.void_payment(state.pool, state.processor, merchant, payment_id, key))
+    return to_response(await payments.void_payment(state.pool, state.gateways, merchant, payment_id, key))
 
 
 @router.post("/{payment_id}/refunds")
@@ -67,5 +69,5 @@ async def refund_payment(
     state = request.app.state
     await state.limiter.check(merchant_owner(merchant.id))
     return to_response(
-        await payments.refund_payment(state.pool, state.processor, merchant, payment_id, key, body.amount_minor)
+        await payments.refund_payment(state.pool, state.gateways, merchant, payment_id, key, body.amount_minor)
     )

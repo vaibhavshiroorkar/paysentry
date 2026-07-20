@@ -109,8 +109,16 @@ CREATE TABLE IF NOT EXISTS payments (
     -- Never the full card number. See docs/design/payments.md, "Card data".
     card_brand             text NOT NULL,
     card_last4             char(4) NOT NULL,
-    processor_reference    text,
+    -- Which gateway holds the authorization, and its id for it there.
+    gateway                text NOT NULL,
+    gateway_reference      text,
     failure_reason         text,
+    -- The key that created the payment, and the key of a capture or void in
+    -- flight. Recovery stores the final response under them.
+    idempotency_key        text NOT NULL,
+    pending_op_key         text,
+    -- Set while a recovery worker holds the row. See docs/design/gateways.md.
+    lease_until            timestamptz,
     created_at             timestamptz NOT NULL DEFAULT now(),
     updated_at             timestamptz NOT NULL DEFAULT now(),
     CHECK (amount_captured <= amount_minor),
@@ -127,8 +135,29 @@ CREATE TABLE IF NOT EXISTS refunds (
     -- A pending refund reserves its amount until the processor answers.
     status          text NOT NULL CHECK (status IN ('pending', 'succeeded', 'failed')),
     failure_reason  text,
+    idempotency_key text NOT NULL,
+    lease_until     timestamptz,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS refunds_payment_idx ON refunds (payment_id, created_at);
+
+-- One row per authorization sent to a gateway. The id is our reference there.
+CREATE TABLE IF NOT EXISTS payment_attempts (
+    id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    payment_id         uuid NOT NULL REFERENCES payments (id),
+    gateway            text NOT NULL,
+    -- pending: sent, or about to be. unknown: sent, no answer. failed: the
+    -- gateway certainly did nothing, or has no record of it.
+    status             text NOT NULL CHECK (status IN ('pending', 'unknown', 'succeeded', 'declined', 'failed')),
+    gateway_reference  text,
+    decline_code       text,
+    lease_until        timestamptz,
+    created_at         timestamptz NOT NULL DEFAULT now(),
+    updated_at         timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS payment_attempts_payment_idx ON payment_attempts (payment_id);
+CREATE INDEX IF NOT EXISTS payment_attempts_open_idx ON payment_attempts (created_at)
+    WHERE status IN ('pending', 'unknown');

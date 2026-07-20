@@ -321,11 +321,19 @@ def add_beta_routes(app: FastAPI, state: GatewayState) -> None:
     async def find_payment(merchantRef: str):  # noqa: N803 (the gateway's own field name)
         return await guarded(state, lambda: beta_payment_body(state.lookup(merchantRef)), beta_error)
 
+    def same_currency(payment_id: str, money: dict) -> int:
+        if money.get("currency") != state.charge(payment_id).currency:
+            raise OperationError(400, "currency_mismatch")
+        return beta_minor(money)
+
     @app.post("/api/payments/{payment_id}/captures")
     async def capture(payment_id: str, body: dict):
         return await guarded(
             state,
-            refusable(payment_id, lambda: state.capture(payment_id, beta_minor(body["money"]), body["merchantRef"])),
+            refusable(
+                payment_id,
+                lambda: state.capture(payment_id, same_currency(payment_id, body["money"]), body["merchantRef"]),
+            ),
             beta_error,
         )
 
@@ -339,7 +347,9 @@ def add_beta_routes(app: FastAPI, state: GatewayState) -> None:
     async def refund(payment_id: str, body: dict):
         return await guarded(
             state,
-            lambda: beta_refund_body(state.refund(payment_id, beta_minor(body["money"]), body["merchantRef"])),
+            lambda: beta_refund_body(
+                state.refund(payment_id, same_currency(payment_id, body["money"]), body["merchantRef"])
+            ),
             beta_error,
         )
 

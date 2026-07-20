@@ -84,6 +84,11 @@ class SystemAccountNotAllowed(ApiError):
     code = "system_account_not_allowed"
 
 
+class GatewayUnavailable(ApiError):
+    status_code = 503
+    code = "gateway_unavailable"
+
+
 class ServiceUnavailable(ApiError):
     status_code = 503
     code = "service_unavailable"

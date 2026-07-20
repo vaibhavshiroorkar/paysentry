@@ -10,6 +10,7 @@ from redis.asyncio import Redis
 from app.config import Settings
 from app.db import init_connection
 from app.main import create_app
+from gateway.app import create_gateway_app
 
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql://paysentry:paysentry@localhost:5432/paysentry_test"
@@ -47,27 +48,49 @@ async def _reset_state() -> None:
 
 
 @pytest.fixture
-async def make_client():
+def gateway_apps():
+    """Fresh mock gateways for each test, served in-process."""
+    return {"alpha": create_gateway_app("alpha"), "beta": create_gateway_app("beta")}
+
+
+@pytest.fixture
+def gateways(gateway_apps):
+    """Each mock gateway's state, to set its behaviour or inspect its charges."""
+    return {name: app.state.gateway for name, app in gateway_apps.items()}
+
+
+@pytest.fixture
+async def make_client(gateway_apps):
     """Build an app on a fresh database. Overrides go to Settings.
 
     By default the rate limit is too high to matter, every request carries the
-    admin key, and every client checks after the test that the ledger still
-    reconciles.
+    admin key, the recovery loop is off, and every client checks after the
+    test that the ledger still reconciles. `wrap_transport` wraps each
+    gateway's transport, to inject network failures.
     """
     stack = AsyncExitStack()
     to_reconcile = []
 
-    async def make(check_reconciliation: bool = True, **overrides) -> httpx.AsyncClient:
+    async def make(
+        check_reconciliation: bool = True, gateway_latency_ms: int = 0, wrap_transport=None, **overrides
+    ) -> httpx.AsyncClient:
         values = {
             "database_url": TEST_DATABASE_URL,
             "redis_url": TEST_REDIS_URL,
             "rate_limit_capacity": 100_000,
             "rate_limit_refill_per_sec": 100_000,
             "admin_api_key": ADMIN_KEY,
+            "gateways": {name: {"flavour": name, "url": f"http://{name}"} for name in gateway_apps},
+            "recovery_interval_sec": 0,
         }
         settings = Settings(_env_file=None, **(values | overrides))
         await _reset_state()
-        app = create_app(settings)
+        transports = {}
+        for name, gateway_app in gateway_apps.items():
+            gateway_app.state.gateway.configure(latency_ms=gateway_latency_ms)
+            transport = httpx.ASGITransport(app=gateway_app)
+            transports[name] = wrap_transport(transport) if wrap_transport else transport
+        app = create_app(settings, gateway_transports=transports)
         await stack.enter_async_context(app.router.lifespan_context(app))
         client = await stack.enter_async_context(
             httpx.AsyncClient(
