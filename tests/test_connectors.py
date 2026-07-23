@@ -8,29 +8,9 @@ from app.connectors import build_connector
 from app.connectors.beta import from_major, to_major
 from gateway.app import create_gateway_app
 from payment_helpers import CAPTURE_FAILS, DECLINED, REFUND_FAILS, VISA
+from transports import FailingTransport, StatusTransport
 
 FLAVOURS = pytest.mark.parametrize("flavour", ["alpha", "beta"])
-
-
-class FailingTransport(httpx.AsyncBaseTransport):
-    """Fails the way a network does. With `inner`, the gateway acts first."""
-
-    def __init__(self, error: Exception, inner: httpx.AsyncBaseTransport | None = None):
-        self.error = error
-        self.inner = inner
-
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        if self.inner is not None:
-            await self.inner.handle_async_request(request)
-        raise self.error
-
-
-class StatusTransport(httpx.AsyncBaseTransport):
-    def __init__(self, status_code: int):
-        self.status_code = status_code
-
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        return httpx.Response(self.status_code, json={})
 
 
 def card(number: str = VISA) -> Card:

@@ -4,6 +4,7 @@ from redis.exceptions import RedisError
 
 from app.auth import require_admin
 from app.reconcile import reconcile
+from app.recovery import run_recovery
 
 router = APIRouter(tags=["ops"])
 
@@ -30,3 +31,12 @@ async def health(request: Request) -> JSONResponse:
 async def reconciliation(request: Request) -> dict:
     mismatches = await reconcile(request.app.state.pool)
     return {"ok": not mismatches, "mismatches": mismatches}
+
+
+@router.post("/internal/recovery/run", dependencies=[Depends(require_admin)])
+async def recovery(request: Request, older_than_sec: float | None = None) -> dict:
+    """Run one recovery pass now. Defaults to RECOVERY_AFTER_SEC."""
+    state = request.app.state
+    if older_than_sec is None:
+        older_than_sec = state.settings.recovery_after_sec
+    return await run_recovery(state.pool, state.gateways, older_than_sec)

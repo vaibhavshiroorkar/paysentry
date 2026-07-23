@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 import httpx
 from fastapi import FastAPI
@@ -9,6 +10,7 @@ from app.db import apply_schema, create_pool
 from app.errors import register_error_handlers
 from app.connectors import build_connector
 from app.ratelimit import RateLimiter
+from app.recovery import recovery_loop
 from app.routes import accounts, merchants, ops, payments, transfers
 
 
@@ -30,6 +32,7 @@ async def lifespan(app: FastAPI):
         name: httpx.AsyncClient(base_url=config.url, transport=transports.get(name), timeout=timeout)
         for name, config in settings.gateways.items()
     }
+    loop = None
     try:
         await apply_schema(pool)
         app.state.pool = pool
@@ -39,8 +42,16 @@ async def lifespan(app: FastAPI):
             name: build_connector(name, config.flavour, clients[name], settings.gateway_timeout_sec)
             for name, config in settings.gateways.items()
         }
+        if settings.recovery_interval_sec > 0:
+            loop = asyncio.create_task(
+                recovery_loop(pool, app.state.gateways, settings.recovery_interval_sec, settings.recovery_after_sec)
+            )
         yield
     finally:
+        if loop is not None:
+            loop.cancel()
+            with suppress(asyncio.CancelledError):
+                await loop
         for client in clients.values():
             await client.aclose()
         await redis.aclose()

@@ -99,6 +99,8 @@ async def make_client(gateway_apps):
                 headers={"X-Admin-Key": ADMIN_KEY},
             )
         )
+        # For tests that call into the app directly, such as its pool.
+        client.app = app
         if check_reconciliation:
             to_reconcile.append(client)
         return client
