@@ -89,7 +89,7 @@ class Connector(Protocol):
 
 `GatewayResult` holds the outcome, the gateway's own id, the final charge status (`authorized` or `captured`) and a decline code.
 
-Every call runs under one deadline (`GATEWAY_TIMEOUT_SEC`, default 2) with `asyncio.timeout`. Connect errors are `not_processed`, because the request never left. Anything that fails after the request was sent is `unknown`.
+Every call runs under one deadline (`GATEWAY_TIMEOUT_SEC`, default 2) with `asyncio.timeout`. Connect errors are `not_processed`, because the request never left. Anything that fails after the request was sent is `unknown`. The httpx connect timeout is half the deadline, so a connection that never opens is caught as a connect error before the deadline can turn it into `unknown`.
 
 | | Alpha | Beta |
 |---|---|---|
@@ -131,4 +131,8 @@ The [test cards](payments.md#test-cards) behave the same on every gateway.
 | `tests/test_gateway_mock.py` | Mock gateway idempotency by reference, both API styles |
 | `tests/test_connectors.py` | Outcome classification for every failure kind, Beta money conversion |
 | `tests/test_payment_gateways.py` | Full payment lifecycle through both gateways |
-| `tests/test_recovery.py` | Timeouts on every operation, crashes before and after the gateway call, recovery leaving fresh work alone, two recovery runs at once, the background loop |
+| `tests/test_recovery.py` | Timeouts on every operation, crashes before and after the gateway call, recovery leaving fresh work alone, a lookup that itself times out, concurrent finishers, two recovery runs at once, a gateway removed from config, the background loop |
+
+Crashes are simulated by `tests/transports.py`, which kills the first gateway request either before or after the gateway acts.
+
+Mutation check, run by hand during the build: removing `status = 'processing'` from the update in `finish_authorization` fails the concurrent finishers test.

@@ -29,6 +29,9 @@ services:
       DATABASE_URL: postgresql://paysentry:paysentry@db:5432/paysentry
       REDIS_URL: redis://redis:6379/0
       ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key}
+      GATEWAYS: >-
+        {"alpha": {"flavour": "alpha", "url": "http://gateway-alpha:9000"},
+         "beta": {"flavour": "beta", "url": "http://gateway-beta:9000"}}
     ports:
       - "8000:8000"
     depends_on:
@@ -36,3 +39,25 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      gateway-alpha:
+        condition: service_started
+      gateway-beta:
+        condition: service_started
+
+  # Mock card gateways. POST /_control on either one sets its latency,
+  # outage and timeout behaviour. See docs/design/gateways.md.
+  gateway-alpha:
+    build: .
+    command: ["/app/.venv/bin/uvicorn", "gateway.app:app", "--host", "0.0.0.0", "--port", "9000"]
+    environment:
+      GATEWAY_FLAVOUR: alpha
+    ports:
+      - "9001:9000"
+
+  gateway-beta:
+    build: .
+    command: ["/app/.venv/bin/uvicorn", "gateway.app:app", "--host", "0.0.0.0", "--port", "9000"]
+    environment:
+      GATEWAY_FLAVOUR: beta
+    ports:
+      - "9002:9000"

@@ -7,6 +7,7 @@ A payment service for merchants. Merchants take card payments, capture or void t
 Built with FastAPI, PostgreSQL (asyncpg, raw SQL) and Redis.
 
 - Payment lifecycle, card handling and per-merchant idempotency: [docs/design/payments.md](docs/design/payments.md)
+- Gateway connectors, timeouts and recovery: [docs/design/gateways.md](docs/design/gateways.md)
 - The ledger underneath: [Design decisions](#design-decisions) below
 
 ## Guarantees
@@ -22,7 +23,8 @@ Each guarantee has a test that fires concurrent requests at a real Postgres inst
 | One client cannot flood the service | Token bucket per merchant or paying account, in one Redis Lua script | Burst past capacity gets 429 with `Retry-After` |
 | A payment is captured at most once | Every transition is `UPDATE ... WHERE status = <expected>` | 20 concurrent captures on one payment: exactly 1 succeeds |
 | Refunds never exceed the capture | Pending refunds reserve their amount under the payment's row lock | 20 concurrent refunds of 100 on a 1000 capture: exactly 10 succeed |
-| A retry during a slow processor call is safe | Keys stay `in_progress` until the outcome is stored | A duplicate sent mid-flight gets `409 request_in_progress` |
+| A retry during a slow gateway call is safe | Keys stay `in_progress` until the outcome is stored | A duplicate sent mid-flight gets `409 request_in_progress` |
+| A gateway timeout never loses or doubles a charge | Every call carries our reference; a recovery job looks it up or re-sends it | Timeouts and process crashes on every operation, settled exactly once |
 | The state machine has no gaps | Model-based test of random capture, void and refund sequences | 30 seeded sequences match a Python model step by step |
 | Card numbers are never stored | Only brand and last 4 kept; validation errors do not echo input | Every stored row is searched for each test card number |
 
@@ -43,7 +45,7 @@ Each guarantee has a test that fires concurrent requests at a real Postgres inst
 
 **The rate limiter fails open.** If Redis is unreachable, payments keep flowing and a warning is logged. Rejecting every payment because a protective layer is down is the worse failure for a payments service. Set `RATE_LIMIT_FAIL_OPEN=false` to return 503 instead. The token bucket allows short bursts, unlike a fixed window, which lets through twice the limit across a window boundary. It reads Redis server time, so app servers with skewed clocks agree.
 
-**Transfers fit in one transaction; payments do not.** A transfer makes no external call, so it runs in one short transaction. A payment calls a card processor, and holding a transaction open across a network call would hold row locks for as long as the processor takes. Payments therefore commit an in-flight state first, call the processor, and record the outcome in a second transaction. [docs/design/payments.md](docs/design/payments.md#the-three-step-pattern) explains the pattern.
+**Transfers fit in one transaction; payments do not.** A transfer makes no external call, so it runs in one short transaction. A payment calls a card gateway, and holding a transaction open across a network call would hold row locks for as long as the gateway takes. Payments therefore commit an in-flight state first, call the gateway, and record the outcome in a second transaction. [docs/design/payments.md](docs/design/payments.md#the-three-step-pattern) explains the pattern.
 
 ## API
 
@@ -70,6 +72,7 @@ Admin routes take `X-Admin-Key` (`ADMIN_API_KEY`, `dev-admin-key` in development
 | `POST` | `/transfers` | `{from_account_id, to_account_id, amount_minor, currency}`; needs `Idempotency-Key` |
 | `GET` | `/transfers/{id}` | |
 | `GET` | `/internal/reconciliation` | `{ok, mismatches}` |
+| `POST` | `/internal/recovery/run?older_than_sec=60` | Run one recovery pass now. It also runs every `RECOVERY_INTERVAL_SEC` |
 | `GET` | `/health` | Postgres and Redis status |
 
 Status codes for payments are listed in [docs/design/payments.md](docs/design/payments.md#status-codes). For transfers: 201 success, 400 missing key, 401 missing admin key, 403 drawing from a system account, 404 unknown account, 422 validation error, insufficient funds, currency mismatch or reused key, 429 rate limited, 503 dependency down.
@@ -123,7 +126,8 @@ uv run pytest -v
 ```
 app/
   payments.py     payment lifecycle: create, capture, void, refund
-  processor.py    fake card processor with test cards
+  connectors/     one connector per gateway API; classifies every outcome
+  recovery.py     settles operations whose gateway outcome is unknown
   cards.py        card validation (Luhn, expiry), never exposes the number
   idempotency.py  per-merchant idempotency keys
   auth.py         merchant API keys, admin key
@@ -132,10 +136,13 @@ app/
   reconcile.py    ledger and payment consistency checks
   schema.sql      tables, constraints, append-only trigger
   routes/         HTTP layer
+gateway/
+  app.py          mock card gateway, two API flavours, failure controls
 tests/
   test_concurrency.py          transfers: duplicate retries, double spend, deadlock
   test_payment_concurrency.py  racing captures, voids and refunds
   test_payment_model.py        model-based test of the payment state machine
+  test_recovery.py             timeouts and crashes on every operation
 ```
 
 ## History
@@ -145,6 +152,7 @@ tests/
 ## Roadmap
 
 - Done: merchants, payment lifecycle, per-merchant idempotency, refunds.
-- Gateway orchestration: mock payment gateways with set latency and failure rates, recovery of unknown outcomes, success-rate routing, a circuit breaker and failover.
+- Done: mock gateways with two API styles, outcome classification, recovery of unknown outcomes.
+- Routing: success-rate routing across gateways, a circuit breaker and failover.
 - Webhooks through a transactional outbox, with retries and HMAC signatures.
 - Load tests with p50 and p99 latency.
