@@ -7,6 +7,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class GatewayConfig(BaseModel):
     flavour: Literal["alpha", "beta"]
     url: str
+    # What the gateway accepts. None means everything.
+    currencies: list[str] | None = None
+    brands: list[str] | None = None
+
+    def accepts(self, currency: str, brand: str) -> bool:
+        return (self.currencies is None or currency in self.currencies) and (
+            self.brands is None or brand in self.brands
+        )
 
 
 class Settings(BaseSettings):
@@ -28,6 +36,14 @@ class Settings(BaseSettings):
     gateway_timeout_sec: float = 2.0
     recovery_after_sec: float = 60.0
     recovery_interval_sec: float = 10.0
+
+    # See docs/design/routing.md, "Settings".
+    routing_strategy: Literal["success_rate", "priority"] = "success_rate"
+    routing_window: int = 100
+    routing_max_attempts: int = 3
+    routing_seed: int | None = None
+    circuit_failure_threshold: int = 5
+    circuit_cooldown_sec: float = 30.0
 
     # Token bucket per paying account: `capacity` requests in a burst,
     # then `refill_per_sec` requests per second after that.

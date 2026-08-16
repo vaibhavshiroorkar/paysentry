@@ -125,3 +125,12 @@ async def db():
     await init_connection(conn)
     yield conn
     await conn.close()
+
+
+@pytest.fixture
+async def redis():
+    """The test Redis database, emptied."""
+    client = Redis.from_url(TEST_REDIS_URL)
+    await client.flushdb()
+    yield client
+    await client.aclose()
