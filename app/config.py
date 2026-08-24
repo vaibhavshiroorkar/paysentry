@@ -32,7 +32,6 @@ class Settings(BaseSettings):
         "alpha": GatewayConfig(flavour="alpha", url="http://localhost:9001"),
         "beta": GatewayConfig(flavour="beta", url="http://localhost:9002"),
     }
-    default_gateway: str = "alpha"
     gateway_timeout_sec: float = 2.0
     recovery_after_sec: float = 60.0
     recovery_interval_sec: float = 10.0

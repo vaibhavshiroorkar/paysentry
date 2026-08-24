@@ -11,6 +11,7 @@ from app.errors import register_error_handlers
 from app.connectors import build_connector
 from app.ratelimit import RateLimiter
 from app.recovery import recovery_loop
+from app.routing import Router
 from app.routes import accounts, merchants, ops, payments, transfers
 
 
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):
         app.state.pool = pool
         app.state.redis = redis
         app.state.limiter = RateLimiter(redis, settings)
+        app.state.router = Router(redis, settings)
         app.state.gateways = {
             name: build_connector(name, config.flavour, clients[name], settings.gateway_timeout_sec)
             for name, config in settings.gateways.items()
@@ -62,7 +64,7 @@ def create_app(
     settings: Settings | None = None, gateway_transports: dict[str, httpx.AsyncBaseTransport] | None = None
 ) -> FastAPI:
     """`gateway_transports` lets tests serve the mock gateways in-process."""
-    app = FastAPI(title="PaySentry Core", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="PaySentry Core", version="0.3.0", lifespan=lifespan)
     app.state.settings = settings or Settings()
     app.state.gateway_transports = gateway_transports
     register_error_handlers(app)

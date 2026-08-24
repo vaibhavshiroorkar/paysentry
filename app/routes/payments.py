@@ -20,9 +20,11 @@ async def create_payment(
 ) -> JSONResponse:
     state = request.app.state
     await state.limiter.check(merchant_owner(merchant.id))
-    return to_response(await payments.create_payment(
-            state.pool, state.gateways, state.settings.default_gateway, merchant, key, body
-        ))
+    return to_response(
+        await payments.create_payment(
+            state.pool, state.gateways, state.router, state.settings.routing_max_attempts, merchant, key, body
+        )
+    )
 
 
 @router.get("/{payment_id}")

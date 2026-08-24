@@ -16,17 +16,20 @@ import asyncpg
 from app import idempotency, ledger
 from app.auth import Merchant, merchant_owner
 from app.connectors import Connector, GatewayResult
+from app.connectors.base import NOT_PROCESSED
 from app.errors import (
     ApiError,
     CaptureExceedsAuthorized,
     GatewayUnavailable,
     InvalidState,
+    NoGatewayAvailable,
     NotFound,
     ProcessorDeclined,
     RefundExceedsAvailable,
 )
 from app.idempotency import StoredResponse
 from app.models import PaymentCreate
+from app.routing import Router
 
 CLEARING = "system:gateway_clearing"
 
@@ -128,9 +131,14 @@ async def _refusal(conn, merchant: Merchant, payment_id: UUID, capture_amount: i
 
 
 async def create_payment(
-    pool: asyncpg.Pool, gateways: dict[str, Connector], gateway: str, merchant: Merchant, key: str,
-    req: PaymentCreate,
+    pool: asyncpg.Pool, gateways: dict[str, Connector], router: Router, max_attempts: int, merchant: Merchant,
+    key: str, req: PaymentCreate,
 ) -> StoredResponse:
+    # Before the key is claimed: with no gateway to try, nothing happens, so
+    # the client may retry with the same key.
+    plan = (await router.plan(req.currency, req.card.brand))[:max_attempts]
+    if not plan:
+        raise NoGatewayAvailable("No gateway can take this payment right now")
     fingerprint = {
         "amount_minor": req.amount_minor,
         "currency": req.currency,
@@ -151,18 +159,30 @@ async def create_payment(
             RETURNING *
             """,
             merchant.id, req.amount_minor, req.currency, req.capture_method, req.card.brand, req.card.last4,
-            gateway, key,
+            plan[0], key,
         )
         attempt_id = await conn.fetchval(
             "INSERT INTO payment_attempts (payment_id, gateway, status) VALUES ($1, $2, 'pending') RETURNING id",
-            payment["id"], gateway,
+            payment["id"], plan[0],
         )
 
-    # The attempt id is our reference at the gateway, so recovery can look it up.
-    result = await gateways[gateway].authorize(
-        reference=str(attempt_id), amount_minor=req.amount_minor, currency=req.currency, card=req.card,
-        capture=req.capture_method == "automatic",
-    )
+    result = NOT_PROCESSED
+    for position, gateway in enumerate(plan):
+        if position > 0:
+            attempt_id = await _fail_over(pool, payment["id"], attempt_id, gateway)
+        if not await router.acquire(gateway):
+            continue  # Its circuit is open, or another request holds the half-open probe.
+        # The attempt id is our reference at the gateway, so recovery can look it up.
+        result = await gateways[gateway].authorize(
+            reference=str(attempt_id), amount_minor=req.amount_minor, currency=req.currency, card=req.card,
+            capture=req.capture_method == "automatic",
+        )
+        await router.record(gateway, result.outcome)
+        # Only "not processed" is safe to retry elsewhere. After "unknown" the
+        # gateway may have charged, and a second gateway could charge again.
+        if result.outcome != "not_processed":
+            break
+
     if result.outcome == "unknown":
         await pool.execute(
             "UPDATE payment_attempts SET status = 'unknown', updated_at = now() WHERE id = $1 AND status = 'pending'",
@@ -170,6 +190,29 @@ async def create_payment(
         )
         return in_flight(payment_body(payment))
     return await finish_authorization(pool, attempt_id, result) or await stored_response(pool, merchant.id, key)
+
+
+async def _fail_over(pool: asyncpg.Pool, payment_id: UUID, previous_attempt_id: UUID, gateway: str) -> UUID:
+    """Close the attempt the last gateway did not process and open one on the next gateway."""
+    async with pool.acquire() as conn, conn.transaction():
+        # Payment first, then attempts: the global lock order.
+        moved = await conn.fetchval(
+            "UPDATE payments SET gateway = $2, updated_at = now() WHERE id = $1 AND status = 'processing' RETURNING id",
+            payment_id, gateway,
+        )
+        if moved is None:
+            raise RuntimeError(f"Payment {payment_id} left processing during failover")
+        await conn.execute(
+            """
+            UPDATE payment_attempts SET status = 'failed', decline_code = 'gateway_unavailable', updated_at = now()
+            WHERE id = $1 AND status = 'pending'
+            """,
+            previous_attempt_id,
+        )
+        return await conn.fetchval(
+            "INSERT INTO payment_attempts (payment_id, gateway, status) VALUES ($1, $2, 'pending') RETURNING id",
+            payment_id, gateway,
+        )
 
 
 async def finish_authorization(pool: asyncpg.Pool, attempt_id: UUID, result: GatewayResult) -> StoredResponse | None:
@@ -191,7 +234,9 @@ async def finish_authorization(pool: asyncpg.Pool, attempt_id: UUID, result: Gat
             UPDATE payments
             SET status = $2,
                 amount_captured = CASE WHEN $2 = 'captured' THEN amount_minor ELSE 0 END,
-                failure_reason = $3, gateway_reference = $4, updated_at = now()
+                failure_reason = $3, gateway_reference = $4, updated_at = now(),
+                -- Captures and refunds must go where the authorization is.
+                gateway = (SELECT gateway FROM payment_attempts WHERE id = $1)
             WHERE id = (SELECT payment_id FROM payment_attempts WHERE id = $1) AND status = 'processing'
             RETURNING *
             """,

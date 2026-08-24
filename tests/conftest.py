@@ -18,6 +18,13 @@ TEST_DATABASE_URL = os.environ.get(
 TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/1")
 ADMIN_KEY = "test-admin-key"
 
+# Three mock gateways with different rules, as in docs/design/routing.md.
+GATEWAY_CONFIGS = {
+    "alpha": {"flavour": "alpha"},
+    "beta": {"flavour": "beta", "brands": ["visa", "mastercard"]},
+    "gamma": {"flavour": "alpha", "currencies": ["INR"]},
+}
+
 
 async def _create_database_if_missing(url: str) -> None:
     server, name = url.rsplit("/", 1)
@@ -50,7 +57,7 @@ async def _reset_state() -> None:
 @pytest.fixture
 def gateway_apps():
     """Fresh mock gateways for each test, served in-process."""
-    return {"alpha": create_gateway_app("alpha"), "beta": create_gateway_app("beta")}
+    return {name: create_gateway_app(config["flavour"]) for name, config in GATEWAY_CONFIGS.items()}
 
 
 @pytest.fixture
@@ -64,15 +71,21 @@ async def make_client(gateway_apps):
     """Build an app on a fresh database. Overrides go to Settings.
 
     By default the rate limit is too high to matter, every request carries the
-    admin key, the recovery loop is off, and every client checks after the
-    test that the ledger still reconciles. `wrap_transport` wraps each
-    gateway's transport, to inject network failures.
+    admin key, the recovery loop is off, gateways are tried in priority
+    order (alpha, beta, gamma), and every client checks after the test that
+    the ledger still reconciles. `use_gateways` picks which gateways the app
+    knows and in what order. `wrap_transport` wraps each gateway's transport,
+    to inject network failures.
     """
     stack = AsyncExitStack()
     to_reconcile = []
 
     async def make(
-        check_reconciliation: bool = True, gateway_latency_ms: int = 0, wrap_transport=None, **overrides
+        check_reconciliation: bool = True,
+        gateway_latency_ms: int = 0,
+        wrap_transport=None,
+        use_gateways: list[str] | None = None,
+        **overrides,
     ) -> httpx.AsyncClient:
         values = {
             "database_url": TEST_DATABASE_URL,
@@ -80,7 +93,11 @@ async def make_client(gateway_apps):
             "rate_limit_capacity": 100_000,
             "rate_limit_refill_per_sec": 100_000,
             "admin_api_key": ADMIN_KEY,
-            "gateways": {name: {"flavour": name, "url": f"http://{name}"} for name in gateway_apps},
+            "gateways": {
+                name: {**GATEWAY_CONFIGS[name], "url": f"http://{name}"}
+                for name in use_gateways or GATEWAY_CONFIGS
+            },
+            "routing_strategy": "priority",
             "recovery_interval_sec": 0,
         }
         settings = Settings(_env_file=None, **(values | overrides))

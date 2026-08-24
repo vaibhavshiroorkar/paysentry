@@ -89,6 +89,11 @@ class GatewayUnavailable(ApiError):
     code = "gateway_unavailable"
 
 
+class NoGatewayAvailable(ApiError):
+    status_code = 503
+    code = "no_gateway_available"
+
+
 class ServiceUnavailable(ApiError):
     status_code = 503
     code = "service_unavailable"

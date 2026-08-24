@@ -72,6 +72,7 @@ class GatewayState:
         self.charges: dict[str, Charge] = {}
         self.charges_by_reference: dict[str, Charge] = {}
         self.refunds_by_reference: dict[str, Refund] = {}
+        self.requests = 0
 
     def configure(self, **settings) -> None:
         for name, value in settings.items():
@@ -83,6 +84,7 @@ class GatewayState:
 
     async def arrive(self) -> bool:
         """Network latency, then maybe refuse. False means answer 503 and do nothing."""
+        self.requests += 1
         if self.behaviour.latency_ms:
             await asyncio.sleep(self.behaviour.latency_ms / 1000)
         return self.rng.random() >= self.behaviour.unavailable_rate

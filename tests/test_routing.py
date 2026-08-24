@@ -7,6 +7,10 @@ from redis.asyncio import Redis
 
 from app.config import Settings
 from app.routing import Router
+from helpers import create_merchant, merchant_headers, new_key
+from payment_helpers import authorized_payment, capture, card, create_payment
+
+AMEX = "378282246310005"
 
 GATEWAYS = {
     "alpha": {"flavour": "alpha", "url": "http://alpha"},
@@ -149,3 +153,120 @@ async def test_redis_down_falls_back_to_priority_with_circuits_closed():
     assert await r.acquire("alpha") is True
     await r.record("alpha", "approved")
     await down.aclose()
+
+
+# Routing through the API
+
+
+async def attempts_of(db) -> list[tuple[str, str]]:
+    rows = await db.fetch("SELECT gateway, status FROM payment_attempts ORDER BY created_at")
+    return [tuple(row) for row in rows]
+
+
+async def test_failover_moves_the_payment_to_the_next_gateway(make_client, gateways, db):
+    client = await make_client()
+    gateways["alpha"].configure(unavailable_rate=1.0)
+    _, key = await create_merchant(client)
+
+    payment_id = await authorized_payment(client, key)
+
+    assert await attempts_of(db) == [("alpha", "failed"), ("beta", "succeeded")]
+    gateways["alpha"].configure(unavailable_rate=0.0)
+    assert (await capture(client, key, payment_id)).status_code == 200
+    (charge,) = gateways["beta"].charges_by_reference.values()
+    assert charge.status == "captured"
+    assert gateways["alpha"].charges_by_reference == {}
+
+
+async def test_no_failover_after_a_decline(make_client, gateways, db):
+    client = await make_client()
+    gateways["alpha"].configure(decline_rate=1.0)
+    _, key = await create_merchant(client)
+
+    response = await create_payment(client, key)
+
+    assert (response.json()["status"], response.json()["failure_reason"]) == ("failed", "do_not_honor")
+    assert await attempts_of(db) == [("alpha", "declined")]
+
+
+async def test_no_failover_after_an_unknown_outcome(make_client, gateways, db):
+    client = await make_client(gateway_timeout_sec=0.1)
+    gateways["alpha"].configure(unknown_rate=1.0, hang_ms=300)
+    _, key = await create_merchant(client)
+
+    response = await create_payment(client, key)
+
+    # alpha may have charged the card, so trying beta could charge it twice.
+    assert response.status_code == 202
+    assert await attempts_of(db) == [("alpha", "unknown")]
+    assert gateways["beta"].charges_by_reference == {}
+
+
+async def test_all_gateways_down_fails_the_payment(make_client, gateways, db):
+    client = await make_client()
+    for gateway in gateways.values():
+        gateway.configure(unavailable_rate=1.0)
+    _, key = await create_merchant(client)
+
+    response = await create_payment(client, key)
+
+    assert (response.json()["status"], response.json()["failure_reason"]) == ("failed", "gateway_unavailable")
+    assert await attempts_of(db) == [("alpha", "failed"), ("beta", "failed"), ("gamma", "failed")]
+
+
+async def test_payments_go_only_to_gateways_that_accept_them(make_client, gateways):
+    client = await make_client(use_gateways=["beta", "gamma", "alpha"])
+    _, key = await create_merchant(client)
+
+    amex = await create_payment(client, key, number=AMEX)
+    usd = await client.post(
+        "/payments",
+        json={"amount_minor": 500, "currency": "USD", "capture_method": "automatic", "card": card()},
+        headers=merchant_headers(key, new_key()),
+    )
+
+    assert amex.json()["status"] == usd.json()["status"] == "captured"
+    # beta takes no amex, so the amex goes to gamma. gamma takes no USD, so the USD visa goes to beta.
+    assert len(gateways["gamma"].charges_by_reference) == 1
+    assert len(gateways["beta"].charges_by_reference) == 1
+    assert gateways["alpha"].charges_by_reference == {}
+
+
+async def test_no_eligible_gateway_answers_503_and_leaves_the_key_free(make_client):
+    client = await make_client(use_gateways=["beta"])
+    _, key = await create_merchant(client)
+    idem = new_key()
+
+    refused = await create_payment(client, key, number=AMEX, key=idem)
+    accepted = await create_payment(client, key, key=idem)
+
+    assert refused.status_code == 503
+    assert refused.json()["error"]["code"] == "no_gateway_available"
+    assert accepted.status_code == 201
+
+
+async def test_open_circuit_stops_calls_to_a_failing_gateway(make_client, gateways):
+    client = await make_client(circuit_failure_threshold=3)
+    gateways["alpha"].configure(unavailable_rate=1.0)
+    _, key = await create_merchant(client)
+
+    for _ in range(3):
+        await create_payment(client, key)
+    calls_when_opened = gateways["alpha"].requests
+    for _ in range(2):
+        assert (await create_payment(client, key)).json()["status"] == "captured"
+
+    assert calls_when_opened == 3
+    assert gateways["alpha"].requests == 3
+
+
+async def test_success_rate_routing_moves_traffic_to_the_healthy_gateway(make_client, gateways, db):
+    client = await make_client(routing_strategy="success_rate", routing_seed=7, use_gateways=["alpha", "beta"])
+    gateways["alpha"].configure(decline_rate=1.0)
+    _, key = await create_merchant(client)
+
+    for _ in range(60):
+        await create_payment(client, key)
+
+    rows = await db.fetch("SELECT gateway FROM payment_attempts ORDER BY created_at OFFSET 20")
+    assert [row["gateway"] for row in rows].count("beta") >= 32

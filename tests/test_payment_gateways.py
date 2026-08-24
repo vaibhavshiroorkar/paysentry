@@ -22,7 +22,7 @@ EACH_GATEWAY = pytest.mark.parametrize("gateway", ["alpha", "beta"])
 
 @EACH_GATEWAY
 async def test_full_lifecycle_through_each_gateway(make_client, gateways, db, gateway):
-    client = await make_client(default_gateway=gateway)
+    client = await make_client(use_gateways=[gateway])
     _, key = await create_merchant(client)
     payment_id = await authorized_payment(client, key, 1_000)
 
@@ -42,7 +42,7 @@ async def test_full_lifecycle_through_each_gateway(make_client, gateways, db, ga
 
 @EACH_GATEWAY
 async def test_usd_payment_through_each_gateway(make_client, gateways, gateway):
-    client = await make_client(default_gateway=gateway)
+    client = await make_client(use_gateways=[gateway])
     _, key = await create_merchant(client)
     created = await client.post(
         "/payments",
@@ -58,7 +58,7 @@ async def test_usd_payment_through_each_gateway(make_client, gateways, gateway):
 
 
 async def test_gateway_unavailable_fails_the_payment(make_client, gateways, db):
-    client = await make_client()
+    client = await make_client(use_gateways=["alpha"])
     gateways["alpha"].configure(unavailable_rate=1.0)
     _, key = await create_merchant(client)
 
