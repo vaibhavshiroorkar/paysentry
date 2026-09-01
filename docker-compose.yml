@@ -31,7 +31,8 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key}
       GATEWAYS: >-
         {"alpha": {"flavour": "alpha", "url": "http://gateway-alpha:9000"},
-         "beta": {"flavour": "beta", "url": "http://gateway-beta:9000"}}
+         "beta": {"flavour": "beta", "url": "http://gateway-beta:9000", "brands": ["visa", "mastercard"]},
+         "gamma": {"flavour": "alpha", "url": "http://gateway-gamma:9000", "currencies": ["INR"]}}
     ports:
       - "8000:8000"
     depends_on:
@@ -42,6 +43,8 @@ services:
       gateway-alpha:
         condition: service_started
       gateway-beta:
+        condition: service_started
+      gateway-gamma:
         condition: service_started
 
   # Mock card gateways. POST /_control on either one sets its latency,
@@ -61,3 +64,11 @@ services:
       GATEWAY_FLAVOUR: beta
     ports:
       - "9002:9000"
+
+  gateway-gamma:
+    build: .
+    command: ["/app/.venv/bin/uvicorn", "gateway.app:app", "--host", "0.0.0.0", "--port", "9000"]
+    environment:
+      GATEWAY_FLAVOUR: alpha
+    ports:
+      - "9003:9000"

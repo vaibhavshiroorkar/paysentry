@@ -118,7 +118,7 @@ To avoid deadlocks, every transaction takes locks in this order:
 
 No code path locks a payment after an account. Plain transfers lock only accounts.
 
-The gateway clearing account takes part in every capture and refund, for every merchant. It is the obvious hot row, and Phase 5 measures it under load.
+The gateway clearing account takes part in every capture and refund, for every merchant. It is the obvious hot row under load. A load test that measures it is on the roadmap.
 
 ## Merchants and authentication
 
@@ -184,7 +184,7 @@ Mutation checks, run by hand during the build:
 
 The concurrency tests give the mock gateway 50 ms of latency, so requests overlap between transaction A and transaction B.
 
-## Coming in later phases
+## Related
 
-- **Phase 3.** Routing across gateways by rules and live success rate, circuit breakers.
-- **Phase 4.** Webhooks to merchants through a transactional outbox.
+- Which gateway a payment goes to, and failover: [routing.md](routing.md).
+- Not built yet: webhooks to merchants through a transactional outbox.

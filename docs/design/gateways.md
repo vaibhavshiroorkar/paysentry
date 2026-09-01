@@ -27,7 +27,7 @@ Every gateway call ends in exactly one of these:
 | `not_processed` | The gateway certainly did nothing | Connection refused, `503` (the gateways promise 503 means nothing was processed) |
 | `unknown` | The gateway may or may not have acted | Our deadline passed after sending, connection dropped mid-response, `500`, `502`, `504` |
 
-The difference between `not_processed` and `unknown` is the core of this phase. After `not_processed` it is safe to give up, or to try another gateway (Phase 3). After `unknown`, both of those can double charge: the first gateway may have taken the money. The only safe move is to find out.
+The difference between `not_processed` and `unknown` is the core of this phase. After `not_processed` it is safe to give up, or to try another gateway ([routing.md](routing.md#failover)). After `unknown`, both of those can double charge: the first gateway may have taken the money. The only safe move is to find out.
 
 ## Every request carries our reference
 
@@ -119,7 +119,6 @@ The [test cards](payments.md#test-cards) behave the same on every gateway.
 | Variable | Default | Meaning |
 |---|---|---|
 | `GATEWAYS` | `{"alpha": {"flavour": "alpha", "url": "http://localhost:9001"}, "beta": {"flavour": "beta", "url": "http://localhost:9002"}}` | JSON: each gateway's name, API flavour and URL |
-| `DEFAULT_GATEWAY` | `alpha` | Used until Phase 3 routing |
 | `GATEWAY_TIMEOUT_SEC` | `2` | Deadline per gateway call |
 | `RECOVERY_AFTER_SEC` | `60` | How long work must be stuck before recovery touches it |
 | `RECOVERY_INTERVAL_SEC` | `10` | How often the recovery loop runs. `0` turns it off |

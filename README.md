@@ -8,6 +8,7 @@ Built with FastAPI, PostgreSQL (asyncpg, raw SQL) and Redis.
 
 - Payment lifecycle, card handling and per-merchant idempotency: [docs/design/payments.md](docs/design/payments.md)
 - Gateway connectors, timeouts and recovery: [docs/design/gateways.md](docs/design/gateways.md)
+- Routing, circuit breakers and failover: [docs/design/routing.md](docs/design/routing.md)
 - The ledger underneath: [Design decisions](#design-decisions) below
 
 ## Guarantees
@@ -25,6 +26,9 @@ Each guarantee has a test that fires concurrent requests at a real Postgres inst
 | Refunds never exceed the capture | Pending refunds reserve their amount under the payment's row lock | 20 concurrent refunds of 100 on a 1000 capture: exactly 10 succeed |
 | A retry during a slow gateway call is safe | Keys stay `in_progress` until the outcome is stored | A duplicate sent mid-flight gets `409 request_in_progress` |
 | A gateway timeout never loses or doubles a charge | Every call carries our reference; a recovery job looks it up or re-sends it | Timeouts and process crashes on every operation, settled exactly once |
+| Failover never charges twice | Fail over only when the gateway certainly did nothing (`503`, connection refused), never after a timeout | A timed-out gateway gets no second attempt elsewhere |
+| A degraded gateway loses its traffic | Thompson sampling over each gateway's last 100 outcomes | Simulation: 89.7% approved against 42.9% for fixed priority when one gateway declines 60% |
+| A dead gateway stops costing calls | Circuit breaker per gateway in Redis, one half-open probe at a time | Simulation: 1.01 gateway calls per payment against 2.00 without the breaker |
 | The state machine has no gaps | Model-based test of random capture, void and refund sequences | 30 seeded sequences match a Python model step by step |
 | Card numbers are never stored | Only brand and last 4 kept; validation errors do not echo input | Every stored row is searched for each test card number |
 
@@ -128,6 +132,7 @@ app/
   payments.py     payment lifecycle: create, capture, void, refund
   connectors/     one connector per gateway API; classifies every outcome
   recovery.py     settles operations whose gateway outcome is unknown
+  routing.py      rules, circuit breakers, success-rate ranking
   cards.py        card validation (Luhn, expiry), never exposes the number
   idempotency.py  per-merchant idempotency keys
   auth.py         merchant API keys, admin key
@@ -143,6 +148,9 @@ tests/
   test_payment_concurrency.py  racing captures, voids and refunds
   test_payment_model.py        model-based test of the payment state machine
   test_recovery.py             timeouts and crashes on every operation
+  test_routing.py              rules, breakers, ranking, failover
+scripts/
+  simulate_routing.py          routing under gateway degradation and outages
 ```
 
 ## History
@@ -153,6 +161,6 @@ tests/
 
 - Done: merchants, payment lifecycle, per-merchant idempotency, refunds.
 - Done: mock gateways with two API styles, outcome classification, recovery of unknown outcomes.
-- Routing: success-rate routing across gateways, a circuit breaker and failover.
+- Done: rule-based and success-rate routing, circuit breakers, failover.
 - Webhooks through a transactional outbox, with retries and HMAC signatures.
 - Load tests with p50 and p99 latency.

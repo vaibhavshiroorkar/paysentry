@@ -81,10 +81,53 @@ Each try is its own `payment_attempts` row with its own reference. When failing 
 
 ## Simulation
 
-`scripts/simulate_routing.py` sends payments through the real app, with real Postgres and Redis, to three in-process mock gateways. It changes the gateways' health in four phases, and runs once with `priority` and once with `success_rate`. Results are in the "Results" section below once the script has run.
+`scripts/simulate_routing.py` sends payments through the real app, with real Postgres and Redis, to three in-process mock gateways. It changes the gateways' health in four phases:
+
+1. All healthy: alpha declines 5%, beta 8%, gamma 10%.
+2. Alpha declines 60%.
+3. Alpha answers `503` to everything.
+4. Alpha back to 5%.
+
+It runs each phase under three setups, and checks that the ledger reconciles after each one.
+
+```sh
+docker compose up -d db redis
+uv run python scripts/simulate_routing.py 1000
+```
+
+### Results
+
+1000 payments per phase, 10 at a time, from one run on 2026-10-11. Runs vary by about a point, because concurrent payments draw from the gateways' random sequences in a different order each time.
+
+Authorization success rate:
+
+| Phase | Fixed priority, no breaker | Fixed priority + breaker | Success rate + breaker |
+|---|---|---|---|
+| 1. All healthy | 93.4% | 93.4% | 91.0% |
+| 2. Alpha declines 60% | 42.9% | 42.9% | 89.7% |
+| 3. Alpha down (503) | 91.1% | 91.1% | 90.3% |
+| 4. Alpha recovered | 95.2% | 91.8% | 92.2% |
+
+Gateway calls per payment:
+
+| Phase | Fixed priority, no breaker | Fixed priority + breaker | Success rate + breaker |
+|---|---|---|---|
+| 1. All healthy | 1.00 | 1.00 | 1.00 |
+| 2. Alpha declines 60% | 1.00 | 1.00 | 1.00 |
+| 3. Alpha down (503) | 2.00 | 1.01 | 1.00 |
+| 4. Alpha recovered | 1.00 | 1.00 | 1.00 |
+
+What the numbers show:
+
+- **Degradation is where success-rate routing earns its place.** Fixed priority keeps sending everything to alpha and approves 42.9%. Success-rate routing moves traffic to beta and gamma within a few dozen payments and holds 89.7%. Failover cannot help here: a decline is an answer, not an outage.
+- **Outages are where the breaker earns its place.** Failover alone keeps payments succeeding (91.1%), but every payment first spends a call on the dead gateway: 2.00 calls per payment. With the breaker, alpha is skipped after 5 errors: 1.01.
+- **Exploration has a cost.** With all gateways healthy, success-rate routing approves 91.0% against 93.4%, because it keeps sending some traffic to beta and gamma to learn how they are doing. That is the price of noticing phase 2 at all.
+- **The breaker is slow to notice a recovery.** In phase 4, both breaker setups still route around alpha, because each phase lasts about 10 seconds and the cooldown is 30. Until the probe, the breaker cannot know alpha is back. A shorter cooldown trades this against more probes into a dead gateway.
 
 ## Tests
 
 | File | Covers |
 |---|---|
-| `tests/test_routing.py` | Rules by currency and brand, failover on `not_processed` only, no failover on declines or unknown outcomes, all gateways down, circuit opening, half-open probe success and failure, success-rate routing moving traffic to the healthier gateway, exploration when gateways are equal |
+| `tests/test_routing.py` | Rules by currency and brand, failover on `not_processed` only, no failover on declines or unknown outcomes, all gateways down, no eligible gateway, circuit opening, half-open probe success and failure, the probe key expiring, success-rate routing moving traffic to the healthier gateway, old outcomes leaving the window, exploration when gateways are equal, Redis down |
+
+Mutation check, run by hand during the build: allowing failover after an `unknown` outcome fails the no-failover-on-unknown test.
