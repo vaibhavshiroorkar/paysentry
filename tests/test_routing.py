@@ -270,3 +270,19 @@ async def test_success_rate_routing_moves_traffic_to_the_healthy_gateway(make_cl
 
     rows = await db.fetch("SELECT gateway FROM payment_attempts ORDER BY created_at OFFSET 20")
     assert [row["gateway"] for row in rows].count("beta") >= 32
+
+
+async def test_replay_does_not_depend_on_gateway_health(make_client, gateways):
+    client = await make_client(use_gateways=["alpha"], circuit_failure_threshold=1)
+    _, key = await create_merchant(client)
+    idem = new_key()
+    first = await create_payment(client, key, key=idem)
+
+    # Open alpha's circuit, leaving no gateway to route to.
+    gateways["alpha"].configure(unavailable_rate=1.0)
+    await create_payment(client, key)
+    retry = await create_payment(client, key, key=idem)
+
+    assert retry.status_code == 201
+    assert retry.headers["Idempotent-Replayed"] == "true"
+    assert retry.content == first.content

@@ -30,7 +30,7 @@ Each gateway declares what it accepts in `GATEWAYS`:
 
 A gateway is eligible when it accepts both the payment's currency and its card brand. Leaving out `currencies` or `brands` means "all".
 
-If no gateway is eligible, or every eligible one has an open circuit, the API answers `503 no_gateway_available` before claiming the idempotency key. Nothing was attempted, so the same key can retry.
+If no gateway is eligible, or every eligible one has an open circuit, the API answers `503 no_gateway_available` and rolls back its claim on the idempotency key. Nothing was attempted, so the same key can retry. The check runs after the replay check: a retry of a payment that already completed gets its stored response, whatever the gateways look like now.
 
 ## 2. Circuit breakers
 

@@ -134,11 +134,8 @@ async def create_payment(
     pool: asyncpg.Pool, gateways: dict[str, Connector], router: Router, max_attempts: int, merchant: Merchant,
     key: str, req: PaymentCreate,
 ) -> StoredResponse:
-    # Before the key is claimed: with no gateway to try, nothing happens, so
-    # the client may retry with the same key.
+    # Planned outside the transaction, since it talks to Redis.
     plan = (await router.plan(req.currency, req.card.brand))[:max_attempts]
-    if not plan:
-        raise NoGatewayAvailable("No gateway can take this payment right now")
     fingerprint = {
         "amount_minor": req.amount_minor,
         "currency": req.currency,
@@ -149,8 +146,13 @@ async def create_payment(
         stored = await idempotency.claim(
             conn, merchant_id=merchant.id, key=key, method="POST", path="/payments", fingerprint=fingerprint
         )
+        # A replay never depends on gateway health, so this check comes after
+        # the claim. Raising rolls the claim back: nothing was attempted, so
+        # the client may retry with the same key.
         if stored is not None:
             return stored
+        if not plan:
+            raise NoGatewayAvailable("No gateway can take this payment right now")
         payment = await conn.fetchrow(
             """
             INSERT INTO payments (merchant_id, amount_minor, currency, capture_method, status,
