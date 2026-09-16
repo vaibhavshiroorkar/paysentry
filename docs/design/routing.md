@@ -46,15 +46,52 @@ Only `not_processed` and `unknown` count as errors. A decline proves the gateway
 
 ## 3. Ranking
 
-`ROUTING_STRATEGY` picks one of two:
+`ROUTING_STRATEGY` picks one of three:
 
 - **`priority`**: the order gateways appear in `GATEWAYS`. Simple and predictable. Used in most tests.
+- **`contextual`**: learns which gateway is best for *this kind of payment*. See [Contextual ranking](#contextual-ranking) below.
 - **`success_rate`** (default): each gateway keeps its last `ROUTING_WINDOW` (100) authorization outcomes in Redis. A success is an approval; declines and errors are failures. For each payment, the router draws one sample per gateway from `Beta(successes + 1, failures + 1)` and tries the gateways in order of their samples.
 
 Thompson sampling handles the trade-off between using the best gateway and checking the others. A gateway at 95% wins almost every draw. A gateway at 40% still wins now and then, so when it recovers, its window fills with fresh successes and its share grows back without a manual reset. A brand new gateway starts at `Beta(1, 1)`, an even guess, so it gets traffic straight away.
 
 Declines count against a gateway on purpose. Different gateways get different approval rates for the same cards (issuer relationships, retry logic, 3DS handling), and that difference is what success-rate routing exists to exploit.
 
+### Contextual ranking
+
+`success_rate` asks "which gateway is best overall?". But gateways differ by segment: one may approve visa well and mastercard badly, another may struggle with large amounts. A single success rate per gateway averages those differences away. `contextual` asks "which gateway is best for this payment?".
+
+**Model: LinUCB**, a contextual bandit (Li et al., 2010). Each payment becomes a feature vector `x` of 11 numbers, all 0 or 1:
+
+| Features | Values |
+|---|---|
+| Bias | always 1 |
+| Card brand | visa, mastercard, amex, other |
+| Amount bucket | under 500, 500 to 5,000, 5,000 to 50,000, over 50,000 (major units) |
+| Currency | INR, USD |
+
+Each gateway keeps the statistics of a ridge regression from features to approval (1 approved, 0 otherwise):
+
+```
+A = lambda * I + sum of x xT      (11 x 11)
+b = sum of reward * x             (11)
+theta = A^-1 b                    estimated approval weights
+score = thetaT x + alpha * sqrt(xT A^-1 x)
+```
+
+The first term is the gateway's predicted approval rate for this payment. The second is an exploration bonus: large when the gateway has seen few payments like this one, small when it has seen many. The router tries gateways in order of score. A gateway with little data in a segment gets tried there, and one that is known to be bad there does not.
+
+Because features are shared, the model generalizes. A gateway that declines mastercard learns a negative mastercard weight from small and large payments alike, so it does not have to fail in every brand-and-amount combination separately.
+
+**Forgetting.** Gateways change, so old evidence must fade. Every routing decision increments a global counter in Redis. A gateway's statistics are multiplied by `gamma ^ (decisions since its last update)` (`ROUTING_DECAY`, default 0.995) before each read and update. Two things follow:
+
+- A gateway that degrades loses its good reputation within a few hundred payments.
+- A gateway that gets no traffic slowly loses its *bad* reputation too: its statistics shrink toward `lambda * I`, its exploration bonus grows, and eventually it is tried again. That is how a recovered gateway gets noticed without a manual reset.
+
+Decay is counted in routing decisions, not seconds. That ties forgetting to traffic: a quiet night forgets nothing, and the simulation behaves the same at any speed.
+
+**Shared state.** Each gateway's `A`, `b` and last-update counter live in one Redis key. A Lua script applies the decay and adds the new observation atomically, so concurrent payments on several API instances never lose an update. Reads fetch all gateways in one round trip, and NumPy solves the 11 x 11 systems in microseconds.
+
+The success windows and circuit breakers keep running under `contextual` too. Breakers still drop dead gateways before ranking.
 ## Failover
 
 Failover happens only on `not_processed`, where the gateway certainly did nothing. Then the next gateway in the plan gets a new attempt, up to `ROUTING_MAX_ATTEMPTS` (3).
@@ -72,7 +109,10 @@ Each try is its own `payment_attempts` row with its own reference. When failing 
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `ROUTING_STRATEGY` | `success_rate` | `success_rate` or `priority` |
+| `ROUTING_STRATEGY` | `success_rate` | `priority`, `success_rate` or `contextual` |
+| `ROUTING_ALPHA` | `0.5` | Contextual: weight of the exploration bonus |
+| `ROUTING_LAMBDA` | `1.0` | Contextual: ridge regularization, the prior that keeps `A` invertible |
+| `ROUTING_DECAY` | `0.995` | Contextual: factor applied per routing decision |
 | `ROUTING_WINDOW` | `100` | Outcomes remembered per gateway |
 | `ROUTING_MAX_ATTEMPTS` | `3` | Gateways tried per payment, counting failover |
 | `ROUTING_SEED` | unset | Seeds Thompson sampling, for repeatable tests and simulations |
