@@ -10,7 +10,7 @@ import asyncio
 import os
 import random
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from decimal import Decimal, InvalidOperation
 
 from fastapi import FastAPI
@@ -30,6 +30,21 @@ class Behaviour:
     unknown_rate: float = 0.0
     hang_ms: int = 5_000
     seed: int | None = None
+    # Segment behaviour, so a routing model has something to learn. A brand
+    # listed here uses its own decline rate instead of decline_rate.
+    decline_by_brand: dict[str, float] = field(default_factory=dict)
+    large_amount_minor: int | None = None
+    large_amount_decline_rate: float = 0.0
+
+
+def brand_of(number: str) -> str:
+    if number.startswith("4"):
+        return "visa"
+    if number[:2] in ("34", "37"):
+        return "amex"
+    if number[:1] in ("2", "5"):
+        return "mastercard"
+    return "other"
 
 
 @dataclass
@@ -94,6 +109,13 @@ class GatewayState:
         if self.rng.random() < self.behaviour.unknown_rate:
             await asyncio.sleep(self.behaviour.hang_ms / 1000)
 
+    def decline_rate(self, number: str, amount: int) -> float:
+        behaviour = self.behaviour
+        rate = behaviour.decline_by_brand.get(brand_of(number), behaviour.decline_rate)
+        if behaviour.large_amount_minor is not None and amount >= behaviour.large_amount_minor:
+            rate = max(rate, behaviour.large_amount_decline_rate)
+        return rate
+
     def charge(self, charge_id: str) -> Charge:
         if charge_id not in self.charges:
             raise OperationError(404, "not_found")
@@ -113,7 +135,7 @@ class GatewayState:
         )
         if number in DECLINE_CARDS:
             charge.status, charge.decline_code = "declined", DECLINE_CARDS[number]
-        elif self.rng.random() < self.behaviour.decline_rate:
+        elif self.rng.random() < self.decline_rate(number, amount):
             charge.status, charge.decline_code = "declined", "do_not_honor"
         elif capture:
             charge.status, charge.captured_amount = "captured", amount

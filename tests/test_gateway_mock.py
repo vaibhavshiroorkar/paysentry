@@ -232,3 +232,25 @@ async def test_beta_rejects_money_in_the_wrong_currency(beta):
         f"/api/payments/{payment_id}/refunds", json={"merchantRef": "r", "money": {"value": "1.00", "currency": "USD"}}
     )
     assert response.status_code == 400
+
+
+async def test_decline_rate_can_depend_on_the_card_brand(alpha):
+    client, state = alpha
+    state.configure(decline_by_brand={"mastercard": 1.0})
+
+    mastercard = (await alpha_charge(client, reference="m", number="5555555555554444")).json()
+    visa = (await alpha_charge(client, reference="v")).json()
+
+    assert (mastercard["status"], mastercard["decline_code"]) == ("declined", "do_not_honor")
+    assert visa["status"] == "authorized"
+
+
+async def test_large_amounts_can_have_their_own_decline_rate(alpha):
+    client, state = alpha
+    state.configure(large_amount_minor=500_000, large_amount_decline_rate=1.0)
+
+    below = (await alpha_charge(client, reference="small", amount=499_999)).json()
+    at = (await alpha_charge(client, reference="large", amount=500_000)).json()
+
+    assert below["status"] == "authorized"
+    assert at["status"] == "declined"
