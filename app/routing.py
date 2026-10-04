@@ -13,6 +13,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from app.config import Settings
+from app.contextual import Context, ContextualModel
 
 log = logging.getLogger(__name__)
 
@@ -77,11 +78,12 @@ class Router:
         self._rng = rng or random.Random(settings.routing_seed)
         self._record = redis.register_script(RECORD)
         self._acquire = redis.register_script(ACQUIRE)
+        self.model = ContextualModel(redis, settings)
 
     def _eligible(self, currency: str, brand: str) -> list[str]:
         return [name for name, config in self._settings.gateways.items() if config.accepts(currency, brand)]
 
-    async def plan(self, currency: str, brand: str) -> list[str]:
+    async def plan(self, currency: str, brand: str, amount_minor: int = 0) -> list[str]:
         """Gateways to try for this payment, best first. Open circuits are left out."""
         eligible = self._eligible(currency, brand)
         try:
@@ -106,6 +108,15 @@ class Router:
 
         if self._settings.routing_strategy == "priority":
             return [gateway for gateway, _ in candidates]
+        if self._settings.routing_strategy == "contextual":
+            names = [gateway for gateway, _ in candidates]
+            try:
+                scores = await self.model.scores(names, Context(currency, brand, amount_minor))
+            except RedisError:
+                log.warning("Contextual model unavailable, using priority order")
+                return names
+            # sorted() is stable, so equal scores (an empty model) keep priority order.
+            return sorted(names, key=scores.get, reverse=True)
         # Thompson sampling: one draw per gateway from Beta(successes + 1, failures + 1).
         samples = {}
         for gateway, window in candidates:
@@ -122,8 +133,11 @@ class Router:
         except RedisError:
             return True
 
-    async def record(self, gateway: str, outcome: str) -> None:
-        """Report an authorization outcome (approved, declined, not_processed, unknown)."""
+    async def record(self, gateway: str, outcome: str, context: Context | None = None) -> None:
+        """Report an authorization outcome (approved, declined, not_processed, unknown).
+
+        With a context, the contextual model learns from it as well.
+        """
         try:
             await self._record(
                 keys=[_window(gateway), _circuit(gateway), _probe(gateway)],
@@ -137,3 +151,9 @@ class Router:
             )
         except RedisError:
             log.warning("Could not record %s for gateway %s", outcome, gateway)
+            return
+        if context is not None and self._settings.routing_strategy == "contextual":
+            try:
+                await self.model.observe(gateway, context, 1 if outcome == "approved" else 0)
+            except RedisError:
+                log.warning("Could not update the contextual model for gateway %s", gateway)

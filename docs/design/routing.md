@@ -78,7 +78,9 @@ theta = A^-1 b                    estimated approval weights
 score = thetaT x + alpha * sqrt(xT A^-1 x)
 ```
 
-The first term is the gateway's predicted approval rate for this payment. The second is an exploration bonus: large when the gateway has seen few payments like this one, small when it has seen many. The router tries gateways in order of score. A gateway with little data in a segment gets tried there, and one that is known to be bad there does not.
+Rewards are centred: an approval counts +0.5 and anything else -0.5. Ridge regression pulls a gateway with no data toward 0, so centring makes "no data" mean a 50% guess rather than 0%. Uncentred, a gateway that has declined everything would score the same as one never tried. The mutation check below caught exactly that.
+
+The first term is the gateway's predicted approval rate for this payment (minus 0.5). The second is an exploration bonus: large when the gateway has seen few payments like this one, small when it has seen many. The router tries gateways in order of score. A gateway with little data in a segment gets tried there, and one that is known to be bad there does not.
 
 Because features are shared, the model generalizes. A gateway that declines mastercard learns a negative mastercard weight from small and large payments alike, so it does not have to fail in every brand-and-amount combination separately.
 

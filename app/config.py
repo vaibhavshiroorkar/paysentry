@@ -37,10 +37,13 @@ class Settings(BaseSettings):
     recovery_interval_sec: float = 10.0
 
     # See docs/design/routing.md, "Settings".
-    routing_strategy: Literal["success_rate", "priority"] = "success_rate"
+    routing_strategy: Literal["success_rate", "priority", "contextual"] = "success_rate"
     routing_window: int = 100
     routing_max_attempts: int = 3
     routing_seed: int | None = None
+    routing_alpha: float = 0.5
+    routing_lambda: float = 1.0
+    routing_decay: float = 0.995
     circuit_failure_threshold: int = 5
     circuit_cooldown_sec: float = 30.0
 
