@@ -29,6 +29,7 @@ from app.errors import (
 )
 from app.idempotency import StoredResponse
 from app.models import PaymentCreate
+from app.contextual import Context
 from app.routing import Router
 
 CLEARING = "system:gateway_clearing"
@@ -135,7 +136,8 @@ async def create_payment(
     key: str, req: PaymentCreate,
 ) -> StoredResponse:
     # Planned outside the transaction, since it talks to Redis.
-    plan = (await router.plan(req.currency, req.card.brand))[:max_attempts]
+    context = Context(req.currency, req.card.brand, req.amount_minor)
+    plan = (await router.plan(context.currency, context.brand, context.amount_minor))[:max_attempts]
     fingerprint = {
         "amount_minor": req.amount_minor,
         "currency": req.currency,
@@ -179,7 +181,7 @@ async def create_payment(
             reference=str(attempt_id), amount_minor=req.amount_minor, currency=req.currency, card=req.card,
             capture=req.capture_method == "automatic",
         )
-        await router.record(gateway, result.outcome)
+        await router.record(gateway, result.outcome, context)
         # Only "not processed" is safe to retry elsewhere. After "unknown" the
         # gateway may have charged, and a second gateway could charge again.
         if result.outcome != "not_processed":

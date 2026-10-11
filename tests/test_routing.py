@@ -8,7 +8,7 @@ from redis.asyncio import Redis
 from app.config import Settings
 from app.routing import Router
 from helpers import create_merchant, merchant_headers, new_key
-from payment_helpers import authorized_payment, capture, card, create_payment
+from payment_helpers import VISA, authorized_payment, capture, card, create_payment
 
 AMEX = "378282246310005"
 
@@ -286,3 +286,41 @@ async def test_replay_does_not_depend_on_gateway_health(make_client, gateways):
     assert retry.status_code == 201
     assert retry.headers["Idempotent-Replayed"] == "true"
     assert retry.content == first.content
+
+
+MASTERCARD = "5555555555554444"
+
+
+async def test_contextual_routing_learns_each_gateways_weak_brand(make_client, gateways, db):
+    client = await make_client(routing_strategy="contextual", use_gateways=["alpha", "beta"])
+    gateways["alpha"].configure(decline_rate=0.05, decline_by_brand={"mastercard": 0.9}, seed=1)
+    gateways["beta"].configure(decline_rate=0.05, decline_by_brand={"visa": 0.9}, seed=2)
+    _, key = await create_merchant(client)
+
+    for i in range(80):
+        await create_payment(client, key, number=VISA if i % 2 == 0 else MASTERCARD)
+
+    rows = await db.fetch(
+        """
+        SELECT p.card_brand, a.gateway FROM payment_attempts a JOIN payments p ON p.id = a.payment_id
+        ORDER BY a.created_at OFFSET 40
+        """
+    )
+    visa = [row["gateway"] for row in rows if row["card_brand"] == "visa"]
+    mastercard = [row["gateway"] for row in rows if row["card_brand"] == "mastercard"]
+    assert visa.count("alpha") >= 0.8 * len(visa)
+    assert mastercard.count("beta") >= 0.8 * len(mastercard)
+
+
+async def test_failover_teaches_the_model_about_both_gateways(make_client, gateways):
+    client = await make_client(routing_strategy="contextual", use_gateways=["alpha", "beta"])
+    gateways["alpha"].configure(unavailable_rate=1.0)
+    _, key = await create_merchant(client)
+
+    response = await create_payment(client, key)
+
+    model = client.app.state.router.model
+    _, alpha_b, _ = await model.raw("alpha")
+    _, beta_b, _ = await model.raw("beta")
+    assert response.json()["status"] == "captured"
+    assert (alpha_b[0], beta_b[0]) == (-0.5, 0.5)

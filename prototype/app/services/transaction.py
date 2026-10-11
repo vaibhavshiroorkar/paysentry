@@ -29,11 +29,11 @@ class TransactionService:
     async def create_transaction(self, txn_data: TransactionCreate):
         new_id = str(uuid.uuid4())
         record = {
-            "type": txn_data.type, # Capture the type (UPI/CARD)
-            "txn_id": new_id,      # Generate unique ID
-            "status": "PENDING",              # Default status
-            "created_at": datetime.now(),     # Timestamp
-            "amount": txn_data.amount,             # Copy user data
+            "type": txn_data.type,
+            "txn_id": new_id,
+            "status": "PENDING",
+            "created_at": datetime.now(),
+            "amount": txn_data.amount,
             "currency": txn_data.currency,       
             "description": txn_data.description
         }

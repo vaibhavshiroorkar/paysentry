@@ -28,13 +28,15 @@ def settings(**overrides) -> Settings:
 @pytest.mark.parametrize(
     "context, expected",
     [
-        (Context("USD", "mastercard", 600_000), [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1]),
-        (Context("INR", "visa", 49_999), [1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0]),
-        (Context("INR", "amex", 50_000), [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0]),
-        (Context("INR", "unknown", 5_000_000), [1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0]),
+        # bias | visa mc amex other | 4 amount buckets | INR USD | brand x large amount
+        (Context("USD", "mastercard", 600_000), [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0]),
+        (Context("INR", "visa", 49_999), [1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0]),
+        (Context("INR", "amex", 499_999), [1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0]),
+        (Context("INR", "amex", 500_000), [1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0]),
+        (Context("INR", "unknown", 5_000_000), [1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1]),
     ],
 )
-def test_features_are_one_hot_with_a_bias(context, expected):
+def test_features_are_one_hot_with_brand_crosses(context, expected):
     assert features(context).tolist() == expected
 
 

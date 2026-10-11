@@ -7,10 +7,9 @@ client = OpenAI(
 )
 
 try:
-    print(" ⚡ Waking up Groq (Round 3)...")
+    print("Calling Groq (attempt 3)...")
     
     response = client.chat.completions.create(
-        # UPDATED MODEL NAME BELOW
         model="llama-3.3-70b-versatile", 
         messages=[
             {"role": "system", "content": "You are a witty Fintech teacher."},
@@ -22,4 +21,4 @@ try:
     print(f"\nAI Answer: {answer}")
 
 except Exception as e:
-    print(f"❌ Error: {e}")
+    print(f"Error: {e}")

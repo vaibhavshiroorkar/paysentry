@@ -29,6 +29,7 @@ services:
       DATABASE_URL: postgresql://paysentry:paysentry@db:5432/paysentry
       REDIS_URL: redis://redis:6379/0
       ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key}
+      ROUTING_STRATEGY: ${ROUTING_STRATEGY:-success_rate}
       GATEWAYS: >-
         {"alpha": {"flavour": "alpha", "url": "http://gateway-alpha:9000"},
          "beta": {"flavour": "beta", "url": "http://gateway-beta:9000", "brands": ["visa", "mastercard"]},
@@ -47,7 +48,7 @@ services:
       gateway-gamma:
         condition: service_started
 
-  # Mock card gateways. POST /_control on either one sets its latency,
+  # Mock card gateways. POST /_control on any of them sets its latency,
   # outage and timeout behaviour. See docs/design/gateways.md.
   gateway-alpha:
     build: .

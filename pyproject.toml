@@ -1,7 +1,7 @@
 [project]
 name = "paysentry-core"
 version = "0.1.0"
-description = "Payment ledger service with idempotent, race-safe transfers"
+description = "Card payments for merchants on a double-entry ledger that stays correct under retries and races"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [

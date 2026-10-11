@@ -41,9 +41,9 @@ class Settings(BaseSettings):
     routing_window: int = 100
     routing_max_attempts: int = 3
     routing_seed: int | None = None
-    routing_alpha: float = 0.5
+    routing_alpha: float = 0.2
     routing_lambda: float = 1.0
-    routing_decay: float = 0.995
+    routing_decay: float = 0.998
     circuit_failure_threshold: int = 5
     circuit_cooldown_sec: float = 30.0
 

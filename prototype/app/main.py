@@ -5,13 +5,13 @@ from app.api.v1 import transactions
 app = FastAPI(
     title="PaySentry API",
     version="1.0.0",
-    description="High-performance fraud detection API"
+    description="Transactions API for a fraud detection prototype"
 )
 
 @app.get("/")
 def health_check():
     return {
-        "status": "System Online 🟢", 
+        "status": "ok",
         "version": "1.0"
     }
 

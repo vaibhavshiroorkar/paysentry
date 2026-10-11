@@ -57,8 +57,8 @@ CREATE TABLE IF NOT EXISTS transfers (
     to_account_id    uuid NOT NULL REFERENCES accounts (id),
     amount_minor     bigint NOT NULL CHECK (amount_minor > 0),
     currency         char(3) NOT NULL,
-    -- PROCESSING only exists inside the posting transaction in v0.1. No other
-    -- session can see it, because the row commits with its final status.
+    -- PROCESSING only exists inside the posting transaction. No other session
+    -- can see it, because the row commits with its final status.
     status           text NOT NULL CHECK (status IN ('PROCESSING', 'SUCCEEDED', 'FAILED')),
     failure_reason   text,
     -- The exact response sent the first time, replayed on retries. json, not

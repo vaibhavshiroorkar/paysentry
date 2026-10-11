@@ -12,7 +12,7 @@ payments service ──> connector (one per gateway API) ──HTTP──> mock 
        └── recovery job ──> asks the gateway what happened to anything left in flight
 ```
 
-- **Mock gateways** (`gateway/`) are a separate FastAPI service. Docker Compose runs two of them with different API styles. Tests run the same app in-process.
+- **Mock gateways** (`gateway/`) are a separate FastAPI service. Docker Compose runs three of them, in two API styles. Tests run the same app in-process.
 - **Connectors** (`app/connectors/`) translate our four operations (authorize, capture, void, refund) into each gateway's API, and translate the answers back.
 - **Recovery** (`app/recovery.py`) resolves operations whose outcome is unknown. It runs on a timer inside the API process, and admins can trigger it with `POST /internal/recovery/run`.
 
@@ -27,7 +27,7 @@ Every gateway call ends in exactly one of these:
 | `not_processed` | The gateway certainly did nothing | Connection refused, `503` (the gateways promise 503 means nothing was processed) |
 | `unknown` | The gateway may or may not have acted | Our deadline passed after sending, connection dropped mid-response, `500`, `502`, `504` |
 
-The difference between `not_processed` and `unknown` is the core of this phase. After `not_processed` it is safe to give up, or to try another gateway ([routing.md](routing.md#failover)). After `unknown`, both of those can double charge: the first gateway may have taken the money. The only safe move is to find out.
+Most of this document depends on telling `not_processed` from `unknown`. After `not_processed` it is safe to give up, or to try another gateway ([routing.md](routing.md#failover)). After `unknown`, both of those can double charge, because the first gateway may have taken the money. The only safe move is to find out what it did.
 
 ## Every request carries our reference
 
@@ -67,11 +67,17 @@ If the gateway's answer is still `unknown`, the job leaves the row for the next 
 
 `pending` covers the crash case. If the process dies after transaction A and before transaction B, the attempt never got an outcome, and recovery treats it the same as `unknown`.
 
-**Why wait 60 seconds.** "Not found" is only trustworthy once the original request can no longer arrive at the gateway. The gateway deadline is 2 seconds, so a request still in flight after a minute is not a realistic case. Looking up too early could mark a payment failed just before the gateway charges it.
+### Why recovery waits 60 seconds
 
-**Several recovery workers.** Each worker takes rows with `FOR UPDATE SKIP LOCKED` and sets a 30 second lease, then commits before calling any gateway. Other workers skip leased rows. The finishing updates are guarded by status (`WHERE status = 'processing'` and so on), so even two workers that both act on a row cannot finish it twice.
+"Not found" is only trustworthy once the original request can no longer arrive at the gateway. The gateway deadline is 2 seconds, so a request still in flight after a minute is not a realistic case. Looking up too early could mark a payment failed just before the gateway charges it.
 
-**Shared finishing code.** The request path and recovery call the same `finish_*` functions in `app/payments.py`. A payment recovered after a timeout ends in exactly the state it would have reached without one, with the same ledger posting and the same stored response.
+### Several recovery workers
+
+Each worker takes rows with `FOR UPDATE SKIP LOCKED` and sets a 30 second lease, then commits before calling any gateway. Other workers skip leased rows. The finishing updates are guarded by status (`WHERE status = 'processing'` and so on), so even two workers that both act on a row cannot finish it twice.
+
+### Shared finishing code
+
+The request path and recovery call the same `finish_*` functions in `app/payments.py`. A payment recovered after a timeout ends in exactly the state it would have reached without one, with the same ledger posting and the same stored response.
 
 ## Connectors
 

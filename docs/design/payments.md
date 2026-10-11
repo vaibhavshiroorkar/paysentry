@@ -2,7 +2,7 @@
 
 How PaySentry takes a card payment from a merchant, moves it through its lifecycle, and records the money. Keep this file in step with the code.
 
-The ledger underneath (accounts, transfers, double-entry entries, row locking) is covered in the [README](../../README.md#design-decisions).
+The ledger underneath (accounts, transfers, double-entry entries, row locking) is covered in the [study guide](../guide.md#4-the-ledger).
 
 ## Overview
 
@@ -25,9 +25,9 @@ Every operation that talks to a gateway follows the same three steps:
 2. **Gateway call.** No database transaction is open while it runs.
 3. **Transaction B.** Record the outcome, post ledger entries, store the response under the idempotency key. Commit.
 
-Holding a transaction open across a network call would keep row locks for as long as the gateway takes to answer, and a slow gateway would stall every other request on those rows. Committing the in-flight state first also leaves a record that the call was attempted. The recovery job uses that record to settle requests whose outcome is unknown.
+Holding a transaction open across a network call would keep row locks for as long as the gateway takes to answer. A slow gateway would then stall every other request on those rows. Committing the in-flight state first also leaves a record that the call was attempted. The recovery job uses that record to settle requests whose outcome is unknown.
 
-**When step 3 never happens.** If the gateway does not answer in time, or the process dies between steps 1 and 3, the payment stays in its in-flight state and the idempotency key stays `in_progress`. Retries with that key get `409 request_in_progress`. The recovery job asks the gateway what happened and finishes the operation. See [gateways.md](gateways.md#recovery).
+Sometimes step 3 never happens. If the gateway does not answer in time, or the process dies between steps 1 and 3, the payment stays in its in-flight state and the idempotency key stays `in_progress`. Retries with that key get `409 request_in_progress`. The recovery job asks the gateway what happened and finishes the operation. See [gateways.md](gateways.md#recovery).
 
 ## Payment state machine
 
@@ -62,7 +62,7 @@ RETURNING *
 
 If no row comes back, the move was illegal and the API returns `409 invalid_state`. Two concurrent captures both run this statement. The second waits for the first one's row lock, then re-checks the `WHERE` clause against the new row, sees `capture_pending`, and matches nothing. So only one capture ever reaches the gateway.
 
-**Partial capture.** A capture may ask for less than the authorized amount. The rest of the hold is released and cannot be captured later.
+A capture may ask for less than the authorized amount. The rest of the hold is released and cannot be captured later.
 
 ## Refunds
 
@@ -87,9 +87,9 @@ Every `POST` that changes a payment needs an `Idempotency-Key` header. Keys live
 | Key still in progress | `409 request_in_progress` |
 | Key used with a different method, path or body | `422 idempotency_key_reused` |
 
-The key is claimed with `INSERT ... ON CONFLICT DO NOTHING` in transaction A, as in the v0.1 ledger. Request errors (unknown payment, illegal state, amount too large) roll transaction A back, so the key stays free for a corrected request. Gateway outcomes (approved, declined) are stored and replayed. A `202` for an unknown outcome is not stored; recovery stores the final response later. When the gateway certainly did nothing (`503`), the key is deleted so the same key can retry.
+The key is claimed with `INSERT ... ON CONFLICT DO NOTHING` in transaction A, the same way the ledger claims transfer keys. Request errors (unknown payment, illegal state, amount too large) roll transaction A back, so the key stays free for a corrected request. Gateway outcomes (approved, declined) are stored and replayed. A `202` for an unknown outcome is not stored; recovery stores the final response later. When the gateway certainly did nothing (`503`), the key is deleted so the same key can retry.
 
-**Card numbers are not hashed into the request fingerprint.** The fingerprint covers the method, path and body, but the card is reduced to brand, last 4 digits and expiry first. A plain SHA-256 of a 16-digit card number can be reversed by brute force, so storing one would amount to storing the number.
+The request fingerprint never includes the card number. It covers the method, path and body, but the card is first reduced to brand, last 4 digits and expiry. A plain SHA-256 of a 16-digit card number can be reversed by brute force, so storing one would amount to storing the number.
 
 The pattern follows Brandur Leach's article "Implementing Stripe-like Idempotency Keys in Postgres".
 
@@ -118,7 +118,7 @@ To avoid deadlocks, every transaction takes locks in this order:
 
 No code path locks a payment after an account. Plain transfers lock only accounts.
 
-The gateway clearing account takes part in every capture and refund, for every merchant. It is the obvious hot row under load. A load test that measures it is on the roadmap.
+The gateway clearing account takes part in every capture and refund, for every merchant. It is the obvious hot row under load. A load test that measures it is not built yet.
 
 ## Merchants and authentication
 

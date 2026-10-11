@@ -24,8 +24,10 @@ from app.config import Settings
 
 BRANDS = ("visa", "mastercard", "amex")  # anything else is "other"
 AMOUNT_EDGES = (50_000, 500_000, 5_000_000)  # minor units: 500, 5,000, 50,000
+LARGE = 500_000  # the amount where brand-specific behaviour often changes
 CURRENCIES = ("INR", "USD")
-DIMENSIONS = 1 + len(BRANDS) + 1 + len(AMOUNT_EDGES) + 1 + len(CURRENCIES)
+BRAND_SLOTS = len(BRANDS) + 1
+DIMENSIONS = 1 + BRAND_SLOTS + len(AMOUNT_EDGES) + 1 + len(CURRENCIES) + BRAND_SLOTS
 
 DECISIONS = "routing:decisions"
 
@@ -69,15 +71,25 @@ class Context:
 
 
 def features(context: Context) -> np.ndarray:
-    """One-hot encoding with a bias term. See the table in docs/design/routing.md."""
+    """One-hot encoding with a bias and brand x large-amount crosses.
+
+    A linear model adds feature effects together, so on its own it cannot say
+    "this gateway is fine for visa, except large visa payments". The crosses
+    give it a weight for exactly that. See the table in docs/design/routing.md.
+    """
     x = np.zeros(DIMENSIONS)
     x[0] = 1.0
     brand = BRANDS.index(context.brand) if context.brand in BRANDS else len(BRANDS)
     x[1 + brand] = 1.0
     bucket = sum(context.amount_minor >= edge for edge in AMOUNT_EDGES)
-    x[2 + len(BRANDS) + bucket] = 1.0
+    offset = 1 + BRAND_SLOTS
+    x[offset + bucket] = 1.0
+    offset += len(AMOUNT_EDGES) + 1
     if context.currency in CURRENCIES:
-        x[3 + len(BRANDS) + len(AMOUNT_EDGES) + CURRENCIES.index(context.currency)] = 1.0
+        x[offset + CURRENCIES.index(context.currency)] = 1.0
+    offset += len(CURRENCIES)
+    if context.amount_minor >= LARGE:
+        x[offset + brand] = 1.0
     return x
 
 
