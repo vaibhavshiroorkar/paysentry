@@ -1,5 +1,8 @@
 # PaySentry study guide
 
+For the development sequence, read [Building PaySentry](build-story.md).
+Use the [documentation index](README.md) for setup, architecture, API contracts, operations, and the test map.
+
 This guide walks through the whole project in the order I would learn it: the ledger first, then payments, then gateways, then routing, then the tests. Each part says what problem the code solves and how it solves it. It also names the file to read and the test that proves it. Each part ends with a few questions, with answers you can expand.
 
 The design docs ([payments](design/payments.md), [gateways](design/gateways.md), [routing](design/routing.md)) are the reference. This guide is the tour. When the two overlap, the design docs have the full tables and settings.
@@ -58,17 +61,17 @@ Open `http://localhost:8000/docs` while the API runs. FastAPI lists every route 
 
 ```
 merchant's server
-      │  HTTPS: Authorization: Bearer sk_..., Idempotency-Key: ...
-      ▼
+      |  HTTPS: Authorization: Bearer sk_..., Idempotency-Key: ...
+      v
 FastAPI app (app/main.py)
   routes/         parse the request, check auth, check the rate limit
   payments.py     the payment lifecycle
   ledger.py       moves money between accounts
-  routing.py      picks a gateway       ──────► Redis (gateway health, model state, rate limits)
-  connectors/     talks to gateways     ──HTTP─► mock gateways (gateway/app.py)
+  routing.py      picks a gateway       ------> Redis (gateway health, model state, rate limits)
+  connectors/     talks to gateways     --HTTP-> mock gateways (gateway/app.py)
   recovery.py     background loop that settles unknown outcomes
-      │
-      ▼
+      |
+      v
 PostgreSQL (app/schema.sql)
 ```
 
@@ -314,11 +317,11 @@ The number is also checked with the Luhn algorithm (`luhn_valid`), which catches
 ### 5.4 The state machine
 
 ```
-processing ──> authorized ──> capture_pending ──> captured ──> refunded
-     │              │                                ▲
-     │              └──> void_pending ──> voided     │
-     ├──> captured (automatic capture) ──────────────┘
-     └──> failed
+processing --> authorized --> capture_pending --> captured --> refunded
+     |              |                                ^
+     |              +--> void_pending --> voided     |
+     +--> captured (automatic capture) --------------+
+     +--> failed
 ```
 
 The `*_pending` and `processing` states mean "we have asked the gateway and are waiting". The full table of transitions is in [payments.md](design/payments.md#payment-state-machine).
@@ -390,7 +393,9 @@ What gets stored depends on what happened:
 - A definite outcome (approved, declined) is stored and replayed forever.
 - A request error (unknown payment, wrong state) rolls back transaction A, so the key stays free.
 - An unknown gateway outcome answers `202` and stores nothing. The key stays `in_progress` until recovery stores the real answer.
-- A gateway that certainly did nothing (`503`) deletes the key. The client may retry with the same key, because nothing happened.
+- A capture, void, or refund that certainly was not processed returns `503` and releases its key for retry.
+- A create request that exhausts its gateway attempts stores a failed payment and replays that result.
+- A create request with no eligible gateway returns `503 no_gateway_available` and leaves its key free.
 
 ### 5.9 Lock order
 
