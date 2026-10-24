@@ -5,15 +5,15 @@ How PaySentry picks a gateway for each payment, and what it does when that gatew
 ## Overview
 
 ```
-POST /payments ──> router.plan(currency, brand)
+POST /payments --> router.plan(currency, brand)
                      1. rules: which gateways can take this payment
                      2. circuit breakers: drop gateways that are failing hard
                      3. ranking: success rate (Thompson sampling) or fixed priority
-                   ──> try gateways in that order
+                   --> try gateways in that order
                      - approved or declined: stop
                      - unknown: stop, answer 202, let recovery settle it
                      - not processed: try the next gateway (failover)
-                   ──> router.record(gateway, outcome)
+                   --> router.record(gateway, outcome)
 ```
 
 The router lives in `app/routing.py`. Its state (success windows and breaker state) is in Redis, so every API instance shares one view of gateway health.

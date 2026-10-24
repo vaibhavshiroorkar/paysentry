@@ -5,11 +5,11 @@ How PaySentry talks to card gateways, and what it does when it cannot tell wheth
 ## Overview
 
 ```
-payments service ──> connector (one per gateway API) ──HTTP──> mock gateway service
-       │                    │
-       │                    └── classifies every call: approved, declined, not processed, unknown
-       │
-       └── recovery job ──> asks the gateway what happened to anything left in flight
+payments service --> connector (one per gateway API) --HTTP--> mock gateway service
+       |                    |
+       |                    +-- classifies every call: approved, declined, not processed, unknown
+       |
+       +-- recovery job --> asks the gateway what happened to anything left in flight
 ```
 
 - **Mock gateways** (`gateway/`) are a separate FastAPI service. Docker Compose runs three of them, in two API styles. Tests run the same app in-process.
@@ -73,7 +73,10 @@ If the gateway's answer is still `unknown`, the job leaves the row for the next 
 
 ### Several recovery workers
 
-Each worker takes rows with `FOR UPDATE SKIP LOCKED` and sets a 30 second lease, then commits before calling any gateway. Other workers skip leased rows. The finishing updates are guarded by status (`WHERE status = 'processing'` and so on), so even two workers that both act on a row cannot finish it twice.
+Each worker claims rows with `FOR NO KEY UPDATE SKIP LOCKED` and sets a 30-second lease.
+The claim commits before any gateway call.
+Other workers skip locked or leased rows.
+Finalizers check the pending status, so competing workers cannot finish the same operation twice.
 
 ### Shared finishing code
 
