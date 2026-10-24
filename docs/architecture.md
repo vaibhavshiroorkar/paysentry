@@ -45,6 +45,8 @@ flowchart TD
 | [app/contextual.py](../app/contextual.py) | LinUCB features, scores, decay and atomic model observations |
 | [app/connectors](../app/connectors) | Provider-specific requests and normalized outcomes |
 | [app/routes](../app/routes) | HTTP parsing, authentication, rate limiting and response conversion |
+| [app/demo.py](../app/demo.py) | Opt-in browser demo sessions, fixed payment actions and a per-session accounting snapshot |
+| [app/static](../app/static) | Buildless demo page, styles and script |
 | [gateway/app.py](../gateway/app.py) | In-memory mock payment processors with controllable failures |
 | [tests](../tests) | API, accounting, concurrency, connector, recovery and routing checks |
 | [scripts/simulate_routing.py](../scripts/simulate_routing.py) | Repeatable routing experiments on a dedicated database |
@@ -64,6 +66,7 @@ The schema is the field-level reference. These relationships explain how to read
 | `payments` | UUID; merchant foreign key | Authorized amount, capture/refund totals, state, gateway, pending operation and lease |
 | `refunds` | UUID; payment foreign key | Pending amount reserves refundable funds; succeeded or failed is final |
 | `payment_attempts` | UUID; payment foreign key | One authorization attempt at one gateway; attempt ID is the external request reference |
+| `demo_sessions` | Token hash; unique merchant foreign key | One demo merchant per session; the raw cookie token is never stored |
 
 Merchant and system owners have one account per currency through a partial unique index.
 Merchant owners use `merchant:<uuid>`. System owners use `system:<name>`.
@@ -170,6 +173,7 @@ The health endpoint still reports Redis failure as unhealthy.
 
 The gateway mock keeps its state in process memory.
 Restarting it loses authorization lookup records even if Postgres still holds payments.
+With embedded demo gateways, the API rejects demo sessions created before its own boot for this reason.
 Recovery is only as reliable as the provider's durable reference and idempotency contract.
 The mock's promise that HTTP 503 means no processing is specific to these connectors.
 

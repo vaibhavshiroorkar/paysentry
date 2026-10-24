@@ -54,6 +54,22 @@ For an interactive PowerShell environment:
 The environment prompt is `paysentry`.
 Run `deactivate` before activating again if an existing terminal still shows an older prompt.
 
+## Run the browser demo
+
+The demo page needs only Postgres and Redis. Embedded mode runs the mock gateways inside the API:
+
+```powershell
+docker compose up -d db redis
+$env:DEMO_ENABLED = 'true'
+$env:DEMO_EMBEDDED_GATEWAYS = 'true'
+uv run uvicorn app.main:app --reload
+```
+
+Open `http://localhost:8000/` and follow the five steps.
+Each session gets its own merchant, so earlier visitors' payments stay out of view.
+Without `DEMO_EMBEDDED_GATEWAYS`, the demo uses the gateways in `GATEWAYS`, as normal payments do.
+The [demo design](design/demo.md) covers sessions and limits. [Hosting](hosting.md) covers the free Render deployment.
+
 ## Configuration
 
 Settings come from [app/config.py](../app/config.py).
@@ -71,7 +87,11 @@ Container connection URLs use service names such as `db`; local Python uses `loc
 | `REDIS_URL` | `redis://localhost:6379/0` | Application Redis database |
 | `DB_POOL_SIZE` | `20` | Maximum connections per app instance; minimum pool size is 2 |
 | `REDIS_TIMEOUT_SEC` | `0.5` | Redis connection and socket timeout |
-| `ADMIN_API_KEY` | `dev-admin-key` | Shared administrator credential for development |
+| `ADMIN_API_KEY` | `dev-admin-key` | Shared administrator credential; production requires at least 32 characters |
+| `ENVIRONMENT` | `development` | `production` also marks demo cookies Secure and requires HTTPS demo origins |
+| `DEMO_ENABLED` | `false` | Serve the browser demo at `/` and its `/demo` routes |
+| `DEMO_EMBEDDED_GATEWAYS` | `false` | Run the mock gateways in process for the demo; requires `DEMO_ENABLED` |
+| `DEMO_SESSION_DAILY_LIMIT` | `200` | New demo sessions allowed per database day, from 1 to 10000 |
 | `GATEWAYS` | Alpha on 9001 and beta on 9002 | JSON map of connector names and capabilities |
 | `GATEWAY_TIMEOUT_SEC` | `2.0` | Whole gateway call deadline; connect timeout is half this |
 | `RECOVERY_AFTER_SEC` | `60.0` | Minimum age before recovery claims an operation |

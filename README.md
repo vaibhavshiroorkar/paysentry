@@ -20,6 +20,8 @@ docker compose up --build
 This starts the API on port 8000, Postgres, Redis and three mock card gateways. API docs are at `http://localhost:8000/docs`.
 
 For local Python, PowerShell examples, configuration, and schema upgrade limits, see the [development guide](docs/development.md).
+It also shows how to run the browser demo, which walks one payment from authorization to balanced ledger entries.
+The [hosting guide](docs/hosting.md) deploys that demo on Render's free plans.
 Keep valuable data out of the disposable development databases.
 
 ## Try a payment
@@ -106,4 +108,4 @@ The [build story](docs/build-story.md) ties each stage to its existing commits a
 
 The [roadmap](docs/roadmap.md) covers the proposed work and completion checks.
 Start with database migrations, then merchant webhooks through a transactional outbox.
-Monitoring, load tests, merchant tools, and a demo follow.
+Monitoring, load tests, merchant tools, and a fuller demo with failure scenarios follow.

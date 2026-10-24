@@ -1,0 +1,45 @@
+# Free-tier portfolio demo. See docs/hosting.md before applying this Blueprint.
+services:
+  - type: web
+    name: paysentry-demo
+    runtime: docker
+    plan: free
+    # Embedded mock gateways keep their state in process memory.
+    numInstances: 1
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEMO_ENABLED
+        value: "true"
+      - key: DEMO_EMBEDDED_GATEWAYS
+        value: "true"
+      - key: ADMIN_API_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: paysentry-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: paysentry-kv
+          property: connectionString
+      # The free database allows few connections.
+      - key: DB_POOL_SIZE
+        value: "5"
+      # Render's proxy sets X-Forwarded-For, which the demo session limit reads.
+      - key: FORWARDED_ALLOW_IPS
+        value: "*"
+
+  - type: keyvalue
+    name: paysentry-kv
+    plan: free
+    # An empty list allows only private connections from this workspace.
+    ipAllowList: []
+
+databases:
+  - name: paysentry-db
+    plan: free
+    postgresMajorVersion: "16"
+    ipAllowList: []

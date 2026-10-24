@@ -45,6 +45,7 @@ A replay can therefore receive `429` while the merchant or account is rate limit
 | GET | `/internal/reconciliation` | Admin | None | 200 reconciliation report |
 | POST | `/internal/recovery/run` | Admin | Optional `older_than_sec` query | 200 completion counts |
 
+With `DEMO_ENABLED=true`, the app also serves the [demo routes](#demo-routes).
 There are no payment-list, merchant-list, webhook, payout, or settlement endpoints yet.
 The account entry list has a limit but no continuation cursor.
 
@@ -229,6 +230,33 @@ Without it, recovery uses `RECOVERY_AFTER_SEC`.
 The response counts completed `authorizations`, `captures`, `voids`, and `refunds`.
 Zero counts can mean no eligible work, an active lease, or an unresolved gateway outcome.
 The [gateway design](design/gateways.md) explains reference reuse and lookup behavior.
+
+## Demo routes
+
+These routes exist only when `DEMO_ENABLED=true`. `GET /` serves the page that calls them.
+The [demo design](design/demo.md) explains the session model.
+
+| Method | Path | Access | Normal result |
+| --- | --- | --- | --- |
+| POST | `/demo/session` | Same origin | 201 new session cookie, or 200 for a live session |
+| GET | `/demo/state` | Demo session | 200 snapshot |
+| POST | `/demo/payments` | Demo session and same origin | 201 authorized INR 500.00 payment |
+| POST | `/demo/payments/{payment_id}/capture` | Demo session and same origin | 200 payment after capturing INR 400.00 |
+| POST | `/demo/payments/{payment_id}/refund` | Demo session and same origin | 201 refund of INR 150.00 |
+
+The session is an HttpOnly, SameSite=Strict cookie named `paysentry_demo`, scoped to `/demo` for one hour.
+POST requests need an `Origin` header that matches the request host and scheme. Production requires `https`.
+Bodies are optional. Any field, such as a card or amount, returns 422.
+
+Each action uses a fixed request key, so a repeat returns the stored result with `Idempotent-Replayed: true`.
+Action responses contain `result` (the payment or refund), `replayed`, and `snapshot`.
+The snapshot holds `payment`, the INR `balance_minor`, the session's `ledger` entries, and three `checks`:
+`balances_match`, `transfers_balance`, and `payments_match`.
+Ledger entries name the account as `Your merchant` or `Gateway clearing`.
+
+A missing, expired, or pre-restart session returns 401. A foreign origin returns 403.
+A payment from another session returns 404.
+Rate limits return 429. The daily session cap and an unreachable Redis return 503, since demo limits fail closed.
 
 ## Error contract
 

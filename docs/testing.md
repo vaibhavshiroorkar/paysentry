@@ -60,6 +60,7 @@ Run one failing test with `-x --tb=short` while diagnosing a setup failure.
 | [test_recovery.py](../tests/test_recovery.py) | Crashes, lookups, leases, competing finishers, missing gateways and background passes |
 | [test_routing.py](../tests/test_routing.py) | Eligibility, circuits, safe failover, Redis fallback and routing through the payment API |
 | [test_contextual.py](../tests/test_contextual.py) | Features, learning, decay, exploration, finite scores and atomic observations |
+| [test_demo.py](../tests/test_demo.py) | Demo isolation, cookies, origins, expiry, quotas, replay, redaction, accounting checks and production settings |
 
 The [shared fixtures](../tests/conftest.py) build an application with isolated state and mock transports.
 The fixture disables the periodic recovery loop unless a test enables it.
