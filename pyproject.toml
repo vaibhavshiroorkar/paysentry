@@ -1,5 +1,5 @@
 [project]
-name = "paysentry-core"
+name = "paysentry"
 version = "0.1.0"
 description = "Card payments for merchants on a double-entry ledger that stays correct under retries and races"
 readme = "README.md"
