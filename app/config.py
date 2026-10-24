@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     redis_timeout_sec: float = 0.5
     # Guards /merchants, /accounts, /transfers and /internal. Set a real secret outside development.
     admin_api_key: str = "dev-admin-key"
+    environment: Literal["development", "production"] = "development"
+    demo_enabled: bool = False
+    demo_embedded_gateways: bool = False
+    demo_session_daily_limit: int = Field(default=200, ge=1, le=10_000)
 
     # See docs/design/gateways.md, "Settings".
     gateways: dict[str, GatewayConfig] = {
@@ -53,3 +57,11 @@ class Settings(BaseSettings):
     rate_limit_refill_per_sec: float = 5.0
     # If Redis is down, keep taking payments rather than reject everyone.
     rate_limit_fail_open: bool = True
+
+    @model_validator(mode="after")
+    def hosted_configuration(self):
+        if self.environment == "production" and len(self.admin_api_key) < 32:
+            raise ValueError("Production requires an administrator secret of at least 32 characters")
+        if self.demo_embedded_gateways and not self.demo_enabled:
+            raise ValueError("Embedded gateways require the demo to be enabled")
+        return self

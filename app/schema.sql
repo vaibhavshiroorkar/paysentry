@@ -161,3 +161,12 @@ CREATE TABLE IF NOT EXISTS payment_attempts (
 CREATE INDEX IF NOT EXISTS payment_attempts_payment_idx ON payment_attempts (payment_id);
 CREATE INDEX IF NOT EXISTS payment_attempts_open_idx ON payment_attempts (created_at)
     WHERE status IN ('pending', 'unknown');
+
+CREATE TABLE IF NOT EXISTS demo_sessions (
+    token_hash   text PRIMARY KEY,
+    merchant_id  uuid NOT NULL UNIQUE REFERENCES merchants (id),
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    expires_at   timestamptz NOT NULL DEFAULT now() + interval '1 hour'
+);
+
+CREATE INDEX IF NOT EXISTS demo_sessions_created_idx ON demo_sessions (created_at);

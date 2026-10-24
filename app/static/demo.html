@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Follow a synthetic card payment through authorization, request replay, capture, refund, and a real double-entry ledger.">
+  <title>PaySentry | Payment lab</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/demo-assets/demo.css">
+  <script src="/demo-assets/demo.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#walkthrough">Skip to the payment demo</a>
+  <header class="site-header wrap">
+    <a class="brand" href="/" aria-label="PaySentry home"><span class="brand-mark" aria-hidden="true">P</span>PaySentry <span class="brand-detail">Payment lab</span></a>
+    <a class="source-link" href="https://github.com/vaibhavshiroorkar/paysentry" target="_blank" rel="noopener noreferrer">View the source</a>
+  </header>
+
+  <main class="wrap">
+    <section class="introduction" aria-labelledby="page-title">
+      <div>
+        <h1 id="page-title">A payment, from<br>request to ledger.</h1>
+        <p>Authorize a test card. Send the same request twice. Capture, refund, and see where every paisa goes.</p>
+      </div>
+      <div class="demo-note"><span class="note-line">Synthetic payments only</span><span>Your own session. No real card details.</span></div>
+    </section>
+
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+    <div class="workspace">
+      <section id="walkthrough" class="walkthrough surface" aria-labelledby="walkthrough-title">
+        <div class="section-heading"><h2 id="walkthrough-title">Try a payment</h2><span id="payment-status" class="pill neutral">Ready</span></div>
+        <div class="receipt">
+          <div class="receipt-heading"><span>Demo order</span><span class="receipt-reference">PS-001</span></div>
+          <div class="order-line"><span>Payment systems field notes</span><strong>INR 500.00</strong></div>
+          <div class="card-line"><span class="card-mark" aria-hidden="true">V</span><span>Test Visa <span class="muted">ending 4242</span></span><span class="test-label">Test card</span></div>
+        </div>
+
+        <ol class="steps">
+          <li><span class="step-number">1</span><div class="step-content"><button id="create" class="action primary" data-action="create">Authorize INR 500.00</button><p>Place a hold. Authorization moves no money.</p></div></li>
+          <li><span class="step-number">2</span><div class="step-content"><button id="retry" class="action" data-action="retry" disabled>Replay the same request</button><p>Get the original result without another charge.</p></div></li>
+          <li><span class="step-number">3</span><div class="step-content"><button id="capture" class="action" data-action="capture" disabled>Capture INR 400.00</button><p>Credit the merchant. Release the unused hold.</p></div></li>
+          <li><span class="step-number">4</span><div class="step-content"><button id="refund" class="action" data-action="refund" disabled>Refund INR 150.00</button><p>Return part of the capture with a new posting.</p></div></li>
+          <li><span class="step-number">5</span><div class="step-content"><button id="check" class="action" data-action="check" disabled>Verify this ledger</button><p>Check balances, transfers, and payment totals.</p></div></li>
+        </ol>
+        <p class="session-note">Your session lasts one hour. All amounts and card details are fixed for this walkthrough.</p>
+      </section>
+
+      <div class="evidence-column">
+        <section class="ledger-panel surface" aria-labelledby="ledger-title">
+          <div class="section-heading"><div><h2 id="ledger-title">Double-entry ledger</h2><p id="entry-count" class="muted">No entries yet</p></div><span id="ledger-status" class="pill neutral">Waiting</span></div>
+          <div class="balance-strip"><span>Merchant balance</span><strong id="balance">INR 0.00</strong></div>
+          <div id="empty-ledger" class="empty-ledger"><div class="empty-ledger-symbol" aria-hidden="true"><span></span><span></span><span></span></div><h3>Every movement has two sides.</h3><p>Capture the payment to see a debit and its matching credit. The entries should always add up to zero.</p></div>
+          <div id="ledger-table-wrap" class="table-wrap" hidden>
+            <table><caption class="sr-only">Ledger entries for your demo session</caption><thead><tr><th scope="col">Account</th><th scope="col">Posting</th><th scope="col" class="amount">Amount</th></tr></thead><tbody id="ledger-rows"></tbody><tfoot><tr><th scope="row" colspan="2">Sum of all entries</th><td id="entry-sum" class="amount">INR 0.00</td></tr></tfoot></table>
+          </div>
+          <div class="checks" aria-label="Accounting checks">
+            <div><span>Balances match their entries</span><span id="check-balances" class="check-state">Waiting</span></div>
+            <div><span>Each transfer balances</span><span id="check-transfers" class="check-state">Waiting</span></div>
+            <div><span>Payment totals match postings</span><span id="check-payments" class="check-state">Waiting</span></div>
+          </div>
+        </section>
+
+        <section class="request-panel surface" aria-labelledby="request-title">
+          <div class="section-heading"><h2 id="request-title">Request evidence</h2><span id="http-status" class="request-status">No request yet</span></div>
+          <p id="request-description" class="request-description">Each action calls the Python payment engine. The result will appear here.</p>
+          <dl class="request-facts"><div><dt>Same operation replayed</dt><dd id="replayed">Waiting</dd></div><div><dt>Payments created</dt><dd id="payment-count">0</dd></div><div><dt>Payment reference</dt><dd id="payment-reference">Waiting</dd></div></dl>
+          <details id="response-details" hidden><summary>View response JSON</summary><pre id="response-json" tabindex="0"></pre></details>
+        </section>
+      </div>
+    </div>
+
+    <section class="explanation" aria-label="How the demo works"><div><h2>Real transactions. Mock gateways.</h2><p>This page uses the same payment code, Postgres transactions, and Redis limits as the API. Your browser gets a private demo session, never an administrator or merchant API key.</p></div><div><h2>Why replay matters</h2><p>A lost response should not become a second charge. Each operation keeps a stable request key. Repeating it returns the stored result, while the ledger records the movement once.</p></div></section>
+  </main>
+
+  <footer class="wrap site-footer"><span>Built with Python, FastAPI, Postgres, and Redis.</span><a href="https://github.com/vaibhavshiroorkar/paysentry/blob/main/docs/build-story.md" target="_blank" rel="noopener noreferrer">Read the build story</a></footer>
+</body>
+</html>
