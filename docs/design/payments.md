@@ -9,10 +9,10 @@ The ledger underneath (accounts, transfers, double-entry entries, row locking) i
 A merchant calls the API with its secret key. It creates a payment with card details. PaySentry asks a card gateway to authorize the card, then records the outcome.
 
 ```
-merchant ──> POST /payments ──> payments service ──> connector ──HTTP──> gateway
-                                     │
-                                     ├──> payments, refunds, idempotency_keys tables
-                                     └──> ledger: gateway clearing account -> merchant account
+merchant --> POST /payments --> payments service --> connector --HTTP--> gateway
+                                     |
+                                     +--> payments, refunds, idempotency_keys tables
+                                     +--> ledger: gateway clearing account -> merchant account
 ```
 
 Gateways, connectors, and what happens when a gateway does not answer are covered in [gateways.md](gateways.md).
@@ -32,11 +32,11 @@ Sometimes step 3 never happens. If the gateway does not answer in time, or the p
 ## Payment state machine
 
 ```
-processing ──> authorized ──> capture_pending ──> captured ──> refunded
-     │              │                                ▲
-     │              └──> void_pending ──> voided     │
-     ├──> captured (automatic capture) ──────────────┘
-     └──> failed
+processing --> authorized --> capture_pending --> captured --> refunded
+     |              |                                ^
+     |              +--> void_pending --> voided     |
+     +--> captured (automatic capture) --------------+
+     +--> failed
 ```
 
 | From | To | Trigger |
@@ -87,7 +87,13 @@ Every `POST` that changes a payment needs an `Idempotency-Key` header. Keys live
 | Key still in progress | `409 request_in_progress` |
 | Key used with a different method, path or body | `422 idempotency_key_reused` |
 
-The key is claimed with `INSERT ... ON CONFLICT DO NOTHING` in transaction A, the same way the ledger claims transfer keys. Request errors (unknown payment, illegal state, amount too large) roll transaction A back, so the key stays free for a corrected request. Gateway outcomes (approved, declined) are stored and replayed. A `202` for an unknown outcome is not stored; recovery stores the final response later. When the gateway certainly did nothing (`503`), the key is deleted so the same key can retry.
+The key is claimed with `INSERT ... ON CONFLICT DO NOTHING` in transaction A.
+Request errors roll transaction A back, leaving the key free for a corrected request.
+Definite gateway outcomes are stored and replayed.
+A `202` response is not stored; the key stays in progress until recovery stores a final response.
+Capture, void, and refund release their keys when the gateway certainly did not process them, returning `503`.
+Payment creation instead stores a failed payment when all authorization attempts are exhausted.
+No eligible gateway returns `503 no_gateway_available` and rolls back the create request's key claim.
 
 The request fingerprint never includes the card number. It covers the method, path and body, but the card is first reduced to brand, last 4 digits and expiry. A plain SHA-256 of a 16-digit card number can be reversed by brute force, so storing one would amount to storing the number.
 
@@ -166,7 +172,8 @@ Any other valid number is approved. The mock gateways implement this table, so i
 
 ## Tests
 
-All of these run against real Postgres and Redis. After every test, a fixture checks that `GET /internal/reconciliation` is clean.
+The suite uses real Postgres and Redis.
+Application clients check reconciliation at teardown unless a test explicitly disables that check to inspect a mismatch.
 
 | File | Covers |
 |---|---|
