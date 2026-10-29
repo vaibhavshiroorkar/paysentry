@@ -2,7 +2,7 @@
 
 How PaySentry takes a card payment from a merchant, moves it through its lifecycle, and records the money. Keep this file in step with the code.
 
-The ledger underneath (accounts, transfers, double-entry entries, row locking) is covered in the [study guide](../guide.md#4-the-ledger).
+The ledger underneath (accounts, transfers, double-entry entries, row locking) is covered in the [architecture](../architecture.md).
 
 ## Overview
 

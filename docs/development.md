@@ -1,6 +1,6 @@
 # Local development
 
-Run commands from the repository root. The active application is outside `prototype/`.
+Run commands from the repository root.
 Use Python 3.12, uv, Docker, and Docker Compose.
 The root project requires Python `>=3.12,<3.13`.
 

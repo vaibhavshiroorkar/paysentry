@@ -116,7 +116,6 @@ Output includes success rates and, for outages, gateway calls per payment.
 It does not measure production throughput, tail latency, provider reliability, or fraud accuracy.
 
 The [routing design](design/routing.md) explains how to interpret the experiments.
-Load tests and operational targets remain separate roadmap work.
 
 ## CI
 

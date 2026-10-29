@@ -179,4 +179,3 @@ Restarting the API preserves database facts when it reconnects to the same datab
 Restarting a mock gateway loses its in-memory charge and refund records.
 
 The development stack has no backup automation, durable gateway service, deployment rollback, or merchant event delivery.
-Those capabilities are planned in the [roadmap](roadmap.md).

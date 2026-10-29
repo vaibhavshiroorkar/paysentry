@@ -1,4 +1,4 @@
-# Free-tier portfolio demo. See docs/hosting.md before applying this Blueprint.
+# Free-tier demo. See docs/hosting.md before applying this Blueprint.
 services:
   - type: web
     name: paysentry-demo

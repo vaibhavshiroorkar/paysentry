@@ -3,9 +3,9 @@
 [![tests](https://github.com/vaibhavshiroorkar/paysentry/actions/workflows/ci.yml/badge.svg)](https://github.com/vaibhavshiroorkar/paysentry/actions/workflows/ci.yml)
 
 PaySentry takes card payments for merchants and records every paisa in a double-entry ledger.
-The portfolio demo uses synthetic cards and mock gateways.
+It charges each card exactly once. Clients retry. Two copies of a request arrive at the same moment. A gateway times out and nobody knows if it charged. PaySentry handles each of these, and each one has a test that runs against a real Postgres.
 
-I built it to learn how to charge a card exactly once. Clients retry. Two copies of a request arrive at the same moment. A gateway times out and you can't tell if it charged. The code handles each of these, and each one has a test that runs against a real Postgres.
+The browser demo uses synthetic cards and mock gateways.
 
 Python, FastAPI, Postgres (plain SQL through asyncpg) and Redis.
 
@@ -70,9 +70,7 @@ A few of the things they fire at the API:
 
 ## How it works
 
-Start with [Building PaySentry](docs/build-story.md) for the full development story.
 The [documentation index](docs/README.md) links the setup guide, architecture, API reference, operations, and tests.
-The [study guide](docs/guide.md) teaches the mechanisms with questions and exercises.
 The design docs go into more detail:
 
 - [payments.md](docs/design/payments.md): the payment lifecycle, idempotency keys and card data
@@ -96,16 +94,3 @@ tests/
 scripts/
   simulate_routing.py
 ```
-
-## History
-
-`prototype/` is the first version, from January and February 2026.
-It began as a fraud detection idea and reached a small transactions API.
-The recorded rebuild milestones run from February through October: ledger, merchant payments, gateway recovery, and routing.
-The [build story](docs/build-story.md) ties each stage to its existing commits and implementation.
-
-## Next
-
-The [roadmap](docs/roadmap.md) covers the proposed work and completion checks.
-Start with database migrations, then merchant webhooks through a transactional outbox.
-Monitoring, load tests, merchant tools, and a fuller demo with failure scenarios follow.

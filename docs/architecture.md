@@ -50,7 +50,6 @@ flowchart TD
 | [gateway/app.py](../gateway/app.py) | In-memory mock payment processors with controllable failures |
 | [tests](../tests) | API, accounting, concurrency, connector, recovery and routing checks |
 | [scripts/simulate_routing.py](../scripts/simulate_routing.py) | Repeatable routing experiments on a dedicated database |
-| [prototype](../prototype) | Archived first implementation, outside the active app |
 
 ## Durable data
 
@@ -180,4 +179,3 @@ The mock's promise that HTTP 503 means no processing is specific to these connec
 Schema startup reruns `CREATE IF NOT EXISTS` statements under an advisory lock.
 It does not perform versioned upgrades of existing table definitions.
 Webhooks, a dashboard, real settlements, payouts, disputes, and live card processing are future work.
-Their proposed order is in the [roadmap](roadmap.md).

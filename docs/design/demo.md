@@ -1,4 +1,4 @@
-# Portfolio demo design
+# Demo design
 
 Expose the existing payment engine through a small browser walkthrough.
 Visitors should create a test payment, replay it, capture part, refund part, and inspect balanced postings.

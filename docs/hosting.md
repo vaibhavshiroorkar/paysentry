@@ -65,4 +65,4 @@ Keep `numInstances: 1`. A second instance would have its own mock gateways and c
 - The merchant and administrative API and `/docs` stay reachable.
   Merchant keys for demo sessions are never sent to the browser, and administrative routes need the generated key.
 - The Blueprint has no backup or restore procedure, and the free database expires.
-  Treat the hosted data as disposable. Roadmap milestone 7 covers durable hosting.
+  Treat the hosted data as disposable.
