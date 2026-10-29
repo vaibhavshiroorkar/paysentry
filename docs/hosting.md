@@ -1,6 +1,6 @@
 # Hosting the demo
 
-The [Render Blueprint](../render.yaml) runs the browser demo on Render's free plans.
+The [Render Blueprint](../render.yaml) runs the browser demo on Render's free plans, live at [paysentry-demo.onrender.com](https://paysentry-demo.onrender.com).
 It creates one web service, one Postgres database, and one Key Value instance.
 The service processes synthetic payments through embedded mock gateways. It never takes real cards.
 

@@ -5,7 +5,10 @@
 PaySentry takes card payments for merchants and records every paisa in a double-entry ledger.
 It charges each card exactly once. Clients retry. Two copies of a request arrive at the same moment. A gateway times out and nobody knows if it charged. PaySentry handles each of these, and each one has a test that runs against a real Postgres.
 
-The browser demo uses synthetic cards and mock gateways.
+Live demo: [paysentry-demo.onrender.com](https://paysentry-demo.onrender.com).
+It uses synthetic cards and mock gateways. It runs on Render's free plan, so the first request after a quiet spell takes about a minute to wake the server.
+
+![The demo after a capture and a refund, with balanced ledger entries](docs/screenshots/demo.png)
 
 Python, FastAPI, Postgres (plain SQL through asyncpg) and Redis.
 
