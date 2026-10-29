@@ -1,7 +1,7 @@
 # Hosting the demo
 
 The [Render Blueprint](../render.yaml) runs the browser demo on Render's free plans, live at [paysentry-demo.onrender.com](https://paysentry-demo.onrender.com).
-It creates one web service, one Postgres database, and one Key Value instance.
+It creates one web service and one Key Value instance. Postgres runs on [Neon](https://neon.tech)'s free plan, because Render's free Postgres expires after 30 days.
 The service processes synthetic payments through embedded mock gateways. It never takes real cards.
 
 ## Free tier limits
@@ -11,18 +11,24 @@ In October 2026 it listed these:
 
 - The web service spins down after 15 minutes without traffic. The next request waits about a minute.
 - Each workspace gets 750 free instance hours a month. Spun-down time does not count.
-- Free Postgres expires 30 days after creation. After a further 14 days, Render deletes it and its data.
 - Free Key Value keeps data only in memory. A restart clears it.
-- A workspace can have one free Postgres database and one free Key Value instance at a time.
+- A workspace can have one free Key Value instance at a time.
+
+Neon's free plan does not expire. Its database suspends after a few idle minutes and wakes on the next query in under a second.
 
 Every resource in the Blueprint sets `plan: free`. Without that, Render picks a paid default.
 
 ## Deploy
 
-1. Push a branch that contains `render.yaml` to GitHub.
-2. In the Render dashboard, choose New, then Blueprint, and connect the repository and branch.
-3. Check that all three resources show the free plan, then apply.
-4. When the deploy is live, open the service URL. `/health` should return `{"postgres":"ok","redis":"ok"}`.
+1. Create a free Neon project with Postgres 16 in the same region as the Render service (`aws-us-west-2` for Render's default, Oregon).
+2. Copy its direct connection string, not the pooled one, since asyncpg's prepared statements need a direct connection.
+   Remove `channel_binding=require` and keep `sslmode=require`. asyncpg would send `channel_binding` to Postgres as a setting, which Postgres rejects.
+3. Push a branch that contains `render.yaml` to GitHub.
+4. In the Render dashboard, choose New, then Blueprint, and connect the repository and branch.
+5. Check that both resources show the free plan, paste the Neon string as `DATABASE_URL`, then apply.
+6. When the deploy is live, open the service URL. `/health` should return `{"postgres":"ok","redis":"ok"}`.
+
+The app creates its tables on startup, so a new database needs no setup.
 
 Render generates `ADMIN_API_KEY`. Read it from the service's Environment page when you need administrative routes.
 The [Blueprint reference](https://render.com/docs/blueprint-spec) describes every field.
@@ -40,9 +46,9 @@ uvx check-jsonschema --schemafile https://render.com/schema/render.yaml.json ren
 | `DEMO_ENABLED` | `true` | Serves the page at `/` and the `/demo` routes |
 | `DEMO_EMBEDDED_GATEWAYS` | `true` | Runs the mock gateways inside the API process, so no gateway service is needed |
 | `ADMIN_API_KEY` | Generated | A random 256-bit value that never appears in the repository |
-| `DATABASE_URL` | From the database | Private connection string |
+| `DATABASE_URL` | Set in the dashboard | Neon's direct connection string, which stays out of the repository |
 | `REDIS_URL` | From Key Value | Private connection string |
-| `DB_POOL_SIZE` | `5` | The free database allows few connections |
+| `DB_POOL_SIZE` | `5` | Keeps connections well under the free database's limit |
 | `FORWARDED_ALLOW_IPS` | `*` | Lets Uvicorn read the visitor address from Render's proxy headers |
 
 Both datastores have an empty `ipAllowList`, so only services in the same workspace can reach them.
@@ -64,5 +70,5 @@ Keep `numInstances: 1`. A second instance would have its own mock gateways and c
   `DEMO_SESSION_DAILY_LIMIT` (200 by default) is the hard bound on new demo merchants.
 - The merchant and administrative API and `/docs` stay reachable.
   Merchant keys for demo sessions are never sent to the browser, and administrative routes need the generated key.
-- The Blueprint has no backup or restore procedure, and the free database expires.
+- The Blueprint has no backup or restore procedure.
   Treat the hosted data as disposable.

@@ -24,7 +24,7 @@ This starts the API on port 8000, Postgres, Redis and three mock card gateways. 
 
 For local Python, PowerShell examples, configuration, and schema upgrade limits, see the [development guide](docs/development.md).
 It also shows how to run the browser demo, which walks one payment from authorization to balanced ledger entries.
-The [hosting guide](docs/hosting.md) deploys that demo on Render's free plans.
+The [hosting guide](docs/hosting.md) deploys that demo on Render's and Neon's free plans.
 Keep valuable data out of the disposable development databases.
 
 ## Try a payment
