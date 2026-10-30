@@ -1,4 +1,6 @@
--- Applied on every startup, so every statement must be safe to re-run.
+-- The schema as it stood before migrations were tracked. Every statement is
+-- safe to re-run, so a database created before schema_migrations existed
+-- runs this once and is recorded as being at version 1.
 
 CREATE TABLE IF NOT EXISTS accounts (
     id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),

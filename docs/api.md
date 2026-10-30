@@ -239,13 +239,14 @@ The [demo design](design/demo.md) explains the session model.
 | Method | Path | Access | Normal result |
 | --- | --- | --- | --- |
 | POST | `/demo/session` | Same origin | 201 new session cookie, or 200 for a live session |
+| DELETE | `/demo/session` | Same origin | 200; ends the session and clears the cookie so the walkthrough can restart |
 | GET | `/demo/state` | Demo session | 200 snapshot |
 | POST | `/demo/payments` | Demo session and same origin | 201 authorized INR 500.00 payment |
 | POST | `/demo/payments/{payment_id}/capture` | Demo session and same origin | 200 payment after capturing INR 400.00 |
 | POST | `/demo/payments/{payment_id}/refund` | Demo session and same origin | 201 refund of INR 150.00 |
 
 The session is an HttpOnly, SameSite=Strict cookie named `paysentry_demo`, scoped to `/demo` for one hour.
-POST requests need an `Origin` header that matches the request host and scheme. Production requires `https`.
+POST and DELETE requests need an `Origin` header that matches the request host and scheme. Production requires `https`.
 Bodies are optional. Any field, such as a card or amount, returns 422.
 
 Each action uses a fixed request key, so a repeat returns the stored result with `Idempotent-Replayed: true`.

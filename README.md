@@ -8,7 +8,7 @@ It charges each card exactly once. Clients retry. Two copies of a request arrive
 Live demo: [paysentry-demo.onrender.com](https://paysentry-demo.onrender.com).
 It uses synthetic cards and mock gateways. It runs on Render's free plan, so the first request after a quiet spell takes about a minute to wake the server.
 
-![The demo after a capture and a refund, with balanced ledger entries](docs/screenshots/demo.png)
+![The test console after a capture, a refund and a ledger check](docs/screenshots/demo.png)
 
 Python, FastAPI, Postgres (plain SQL through asyncpg) and Redis.
 
@@ -22,7 +22,7 @@ docker compose up --build
 
 This starts the API on port 8000, Postgres, Redis and three mock card gateways. API docs are at `http://localhost:8000/docs`.
 
-For local Python, PowerShell examples, configuration, and schema upgrade limits, see the [development guide](docs/development.md).
+For local Python, PowerShell examples, configuration, and schema migrations, see the [development guide](docs/development.md).
 It also shows how to run the browser demo, which walks one payment from authorization to balanced ledger entries.
 The [hosting guide](docs/hosting.md) deploys that demo on Render's and Neon's free plans.
 Keep valuable data out of the disposable development databases.
@@ -69,7 +69,7 @@ A few of the things they fire at the API:
 - 50 spends of 30 from a balance of 100. Exactly 3 go through.
 - 100 transfers A->B and B->A at once. None deadlock.
 - 20 refunds of 100 against a 1000 capture. Exactly 10 go through.
-- A gateway timeout or a crash in the middle of every operation. A background job asks the gateway what happened and finishes the payment once.
+- A gateway timeout during authorization, capture, void or refund, and a crash after the gateway acted on an authorization, capture or refund. A background job asks the gateway what happened and finishes the operation once.
 
 ## How it works
 
@@ -89,8 +89,8 @@ app/
   connectors/     one per gateway API
   recovery.py     settles payments whose gateway outcome is unknown
   routing.py      rules, circuit breakers, success-rate ranking
-  contextual.py   LinUCB routing model
-  schema.sql      tables, constraints, append-only trigger
+  contextual.py   LinUCB routing model, used when ROUTING_STRATEGY=contextual
+  migrations/     numbered schema changes, each applied once
   routes/         HTTP layer
 gateway/          mock card gateway
 tests/

@@ -83,6 +83,42 @@ async def test_crash_before_sending_ends_as_no_record(make_client, gateways):
     assert await merchant_balance(client, key) == 0
 
 
+async def test_crash_after_the_gateway_captured_is_recovered(make_client, gateways, db):
+    client = await make_client(wrap_transport=lambda inner: CrashOnce(inner, after_gateway=True, path_suffix="/capture"))
+    _, key = await create_merchant(client)
+    payment_id = await authorized_payment(client, key, 1_000)
+    idem = new_key()
+
+    with pytest.raises(RuntimeError):
+        await capture(client, key, payment_id, key=idem)
+    assert (await get_payment(client, key, payment_id))["status"] == "capture_pending"
+
+    counts = await recover(client)
+    retry = await capture(client, key, payment_id, key=idem)
+
+    assert counts["captures"] == 1
+    assert (retry.status_code, retry.json()["status"]) == (200, "captured")
+    assert await merchant_balance(client, key) == 1_000
+
+
+async def test_crash_after_the_gateway_refunded_is_recovered(make_client, gateways, db):
+    client = await make_client(wrap_transport=lambda inner: CrashOnce(inner, after_gateway=True, path_suffix="/refunds"))
+    _, key = await create_merchant(client)
+    payment_id = await captured_payment(client, key, 1_000)
+    idem = new_key()
+
+    with pytest.raises(RuntimeError):
+        await refund(client, key, payment_id, 400, key=idem)
+    assert await db.fetchval("SELECT status FROM refunds") == "pending"
+
+    counts = await recover(client)
+    retry = await refund(client, key, payment_id, 400, key=idem)
+
+    assert counts["refunds"] == 1
+    assert (retry.status_code, retry.json()["status"]) == (201, "succeeded")
+    assert await merchant_balance(client, key) == 600
+
+
 async def test_unknown_capture_is_recovered(make_client, gateways):
     client = await make_client(gateway_timeout_sec=0.1)
     _, key = await create_merchant(client)

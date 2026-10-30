@@ -29,8 +29,8 @@ flowchart TD
 | --- | --- |
 | [app/main.py](../app/main.py) | App factory, resource startup, gateway clients, recovery task, shutdown |
 | [app/config.py](../app/config.py) | Environment settings and gateway capability configuration |
-| [app/db.py](../app/db.py) | Connection pool, JSON codec, schema application and startup lock |
-| [app/schema.sql](../app/schema.sql) | Tables, indexes, constraints, system accounts, append-only ledger trigger |
+| [app/db.py](../app/db.py) | Connection pool, JSON codec, migration runner and startup lock |
+| [app/migrations/](../app/migrations) | Numbered schema changes. `001_initial.sql` holds tables, indexes, constraints, system accounts and the append-only ledger trigger |
 | [app/auth.py](../app/auth.py) | Merchant keys, merchant identity, administrator authentication |
 | [app/cards.py](../app/cards.py) | Card validation, brand detection, safe card fingerprint |
 | [app/models.py](../app/models.py) | Validated request fields, amounts, currencies, reserved owner prefixes |
@@ -176,6 +176,7 @@ With embedded demo gateways, the API rejects demo sessions created before its ow
 Recovery is only as reliable as the provider's durable reference and idempotency contract.
 The mock's promise that HTTP 503 means no processing is specific to these connectors.
 
-Schema startup reruns `CREATE IF NOT EXISTS` statements under an advisory lock.
-It does not perform versioned upgrades of existing table definitions.
+At startup the app applies each file in `app/migrations/` that `schema_migrations` has not recorded, under an advisory lock.
+Each migration commits with its record, so a failed one leaves the database at the last complete version.
+Change the schema by adding a new numbered file; editing a shipped migration never reaches a live database.
 Webhooks, a dashboard, real settlements, payouts, disputes, and live card processing are future work.

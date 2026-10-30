@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
@@ -84,6 +85,9 @@ def create_app(
     """`gateway_transports` lets tests serve the mock gateways in-process."""
     app = FastAPI(title="PaySentry Core", version="0.3.0", lifespan=lifespan)
     app.state.settings = settings or Settings()
+    # Uvicorn configures only its own loggers, so without this the recovery
+    # loop's records never reach the host's log stream.
+    logging.basicConfig(level=app.state.settings.log_level, format="%(levelname)s %(name)s: %(message)s")
     app.state.gateway_transports = gateway_transports
     register_error_handlers(app)
     app.include_router(merchants.router)

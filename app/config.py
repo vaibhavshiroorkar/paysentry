@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     demo_enabled: bool = False
     demo_embedded_gateways: bool = False
     demo_session_daily_limit: int = Field(default=200, ge=1, le=10_000)
+    # Proxies in front of the app that append to X-Forwarded-For. The demo's
+    # per-address limit reads the entry the last of them wrote; earlier entries
+    # come from the client and can be forged. 0 uses the socket address.
+    trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     # See docs/design/gateways.md, "Settings".
     gateways: dict[str, GatewayConfig] = {

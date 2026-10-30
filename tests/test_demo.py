@@ -175,3 +175,75 @@ async def test_demo_accounting_checks_detect_inconsistent_state(make_client, cor
         await client.app.state.pool.execute("UPDATE payments SET amount_captured = 39999")
     checks = (await client.get("/demo/state")).json()["checks"]
     assert checks["balances_match" if corrupt == "balance" else "payments_match"] is False
+
+
+async def test_ending_a_session_lets_the_visitor_start_over(make_client):
+    client = await make_client(demo_enabled=True)
+    await start_session(client)
+    await create_demo_payment(client)
+    ended = await client.delete("/demo/session", headers=ORIGIN)
+    assert ended.status_code == 200
+    assert "max-age=0" in ended.headers["set-cookie"].lower()
+    client.cookies.clear()
+    assert (await client.get("/demo/state")).status_code == 401
+    await start_session(client)
+    assert (await client.get("/demo/state")).json()["payment"] is None
+    assert await client.app.state.pool.fetchval("SELECT count(*) FROM merchants") == 2
+
+
+async def test_ended_session_cookie_no_longer_works(make_client):
+    client = await make_client(demo_enabled=True)
+    await start_session(client)
+    token = client.cookies.get("paysentry_demo")
+    await client.delete("/demo/session", headers=ORIGIN)
+    client.cookies.set("paysentry_demo", token, path="/demo")
+    assert (await client.get("/demo/state")).status_code == 401
+
+
+async def test_ending_a_session_requires_the_same_origin(make_client):
+    client = await make_client(demo_enabled=True)
+    await start_session(client)
+    assert (await client.delete("/demo/session")).status_code == 403
+    assert (await client.get("/demo/state")).status_code == 200
+
+
+async def new_session_status(client, headers=None) -> int:
+    client.cookies.clear()
+    return (await client.post("/demo/session", headers=ORIGIN | (headers or {}), json={})).status_code
+
+
+async def test_one_address_cannot_open_sessions_without_limit(make_client):
+    client = await make_client(demo_enabled=True)
+    assert [await new_session_status(client) for _ in range(4)] == [201, 201, 201, 429]
+
+
+async def test_forged_forwarded_entries_do_not_buy_new_sessions(make_client):
+    client = await make_client(demo_enabled=True, trusted_proxy_hops=1)
+    # The client writes everything before the entry the proxy appended.
+    statuses = [
+        await new_session_status(client, {"X-Forwarded-For": f"10.0.0.{n}, 203.0.113.9"}) for n in range(4)
+    ]
+    assert statuses == [201, 201, 201, 429]
+    assert await new_session_status(client, {"X-Forwarded-For": "198.51.100.4"}) == 201
+
+
+async def test_pending_payment_returns_202_with_a_snapshot(make_client, gateways):
+    client = await make_client(demo_enabled=True, gateway_timeout_sec=0.1)
+    await start_session(client)
+    gateways["alpha"].configure(unknown_rate=1.0, hang_ms=300)
+    response = await client.post("/demo/payments", headers=ORIGIN, json={})
+    assert response.status_code == 202, response.text
+    assert response.json()["snapshot"]["payment"]["status"] == "processing"
+    assert response.json()["snapshot"]["ledger"] == []
+
+
+async def test_gateway_refusal_on_capture_keeps_the_snapshot(make_client, gateways):
+    client = await make_client(demo_enabled=True, use_gateways=["alpha"])
+    await start_session(client)
+    payment_id = (await create_demo_payment(client)).json()["result"]["id"]
+    gateways["alpha"].configure(unavailable_rate=1.0)
+    response = await client.post(f"/demo/payments/{payment_id}/capture", headers=ORIGIN, json={})
+    body = response.json()
+    assert response.status_code in (402, 503), response.text
+    assert body["result"]["error"]["message"]
+    assert body["snapshot"]["payment"]["id"] == payment_id

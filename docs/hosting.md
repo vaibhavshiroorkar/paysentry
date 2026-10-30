@@ -49,9 +49,13 @@ uvx check-jsonschema --schemafile https://render.com/schema/render.yaml.json ren
 | `DATABASE_URL` | Set in the dashboard | Neon's direct connection string, which stays out of the repository |
 | `REDIS_URL` | From Key Value | Private connection string |
 | `DB_POOL_SIZE` | `5` | Keeps connections well under the free database's limit |
-| `FORWARDED_ALLOW_IPS` | `*` | Lets Uvicorn read the visitor address from Render's proxy headers |
+| `TRUSTED_PROXY_HOPS` | `1` | The demo session limit reads the `X-Forwarded-For` entry Render's proxy appended |
 
-Both datastores have an empty `ipAllowList`, so only services in the same workspace can reach them.
+Key Value has an empty `ipAllowList`, so only services in the same workspace can reach it.
+Neon is reachable from the internet and relies on its password, so keep `DATABASE_URL` secret.
+
+If the service was created before this Blueprint changed, check its environment in the dashboard.
+An old `FORWARDED_ALLOW_IPS=*` makes Uvicorn trust the leftmost, client-written address; remove it.
 The container listens on Render's `PORT`.
 
 ## Restarts and sleep
@@ -65,9 +69,10 @@ Keep `numInstances: 1`. A second instance would have its own mock gateways and c
 
 ## Known limits
 
-- Uvicorn takes the leftmost `X-Forwarded-For` address when it trusts every proxy, and a visitor can forge that.
-  The per-address session limit (a burst of three, then one a minute) is therefore advisory.
-  `DEMO_SESSION_DAILY_LIMIT` (200 by default) is the hard bound on new demo merchants.
+- The per-address session limit (a burst of three, then one a minute) keys on the address Render's proxy saw.
+  Someone with many real addresses can still use up `DEMO_SESSION_DAILY_LIMIT` (200 by default),
+  which is the hard bound on new demo merchants.
+- Sessions last an hour, but the free service sleeps after 15 idle minutes and a restart ends every session.
 - The merchant and administrative API and `/docs` stay reachable.
   Merchant keys for demo sessions are never sent to the browser, and administrative routes need the generated key.
 - The Blueprint has no backup or restore procedure.

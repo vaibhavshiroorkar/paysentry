@@ -1,6 +1,6 @@
 [project]
 name = "paysentry"
-version = "0.1.0"
+version = "0.3.0"
 description = "Card payments for merchants on a double-entry ledger that stays correct under retries and races"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -18,6 +18,7 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "ruff>=0.14,<1",
 ]
 
 [tool.pytest.ini_options]
@@ -25,3 +26,11 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 130
+
+[tool.ruff.lint]
+# Pyflakes and the error classes of pycodestyle: real bugs, not style.
+select = ["E4", "E7", "E9", "F"]

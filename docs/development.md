@@ -65,7 +65,7 @@ $env:DEMO_EMBEDDED_GATEWAYS = 'true'
 uv run uvicorn app.main:app --reload
 ```
 
-Open `http://localhost:8000/` and follow the five steps.
+Open `http://localhost:8000/` and run the actions left to right. Start over ends the session so you can run them again.
 Each session gets its own merchant, so earlier visitors' payments stay out of view.
 Without `DEMO_EMBEDDED_GATEWAYS`, the demo uses the gateways in `GATEWAYS`, as normal payments do.
 The [demo design](design/demo.md) covers sessions and limits. [Hosting](hosting.md) covers the free Render deployment.
@@ -92,6 +92,8 @@ Container connection URLs use service names such as `db`; local Python uses `loc
 | `DEMO_ENABLED` | `false` | Serve the browser demo at `/` and its `/demo` routes |
 | `DEMO_EMBEDDED_GATEWAYS` | `false` | Run the mock gateways in process for the demo; requires `DEMO_ENABLED` |
 | `DEMO_SESSION_DAILY_LIMIT` | `200` | New demo sessions allowed per database day, from 1 to 10000 |
+| `TRUSTED_PROXY_HOPS` | `0` | Proxies that append to `X-Forwarded-For`; the demo session limit reads the last one's entry. `0` uses the socket address |
+| `LOG_LEVEL` | `INFO` | Application log level, including recovery outcomes |
 | `GATEWAYS` | Alpha on 9001 and beta on 9002 | JSON map of connector names and capabilities |
 | `GATEWAY_TIMEOUT_SEC` | `2.0` | Whole gateway call deadline; connect timeout is half this |
 | `RECOVERY_AFTER_SEC` | `60.0` | Minimum age before recovery claims an operation |
@@ -190,7 +192,7 @@ The [testing guide](testing.md) explains fixtures, focused test commands, and ex
 | Healthy container but connection still refused | Check published ports and attached networks; internal health does not prove host reachability |
 | Local API cannot reach a gateway | Start the gateway services and use host ports in local settings |
 | Container API cannot reach Postgres | Use `db:5432`, rather than container-local `localhost` |
-| Missing column after pulling changes | Startup schema application does not alter existing tables; use a fresh disposable database or an explicit upgrade |
+| Missing column after pulling changes | Restart the app; startup applies any migration in `app/migrations/` the database has not recorded |
 | Test database creation fails | Test database credentials need permission to create the dedicated database |
 | `401 unauthorized` | Check administrator versus merchant headers and the active environment |
 | `429 rate_limited` | Wait for refill and honor `Retry-After` |

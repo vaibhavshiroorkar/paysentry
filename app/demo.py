@@ -56,6 +56,18 @@ async def session_row(request: Request):
     )
 
 
+def client_address(request: Request) -> str:
+    hops = request.app.state.settings.trusted_proxy_hops
+    if hops:
+        forwarded = [
+            part.strip() for value in request.headers.getlist("X-Forwarded-For") for part in value.split(",")
+        ]
+        forwarded = [part for part in forwarded if part]
+        if len(forwarded) >= hops:
+            return forwarded[-hops]
+    return request.client.host if request.client else "unknown"
+
+
 async def demo_merchant(request: Request) -> Merchant:
     row = await session_row(request)
     if row is None:
@@ -69,7 +81,7 @@ async def start_session(request: Request, body: EmptyAction | None = None):
     if existing is not None:
         return {"expires_at": existing["expires_at"].isoformat()}
     state = request.app.state
-    address = request.client.host if request.client else "unknown"
+    address = client_address(request)
     await state.demo_session_limiter.check("demo-session:" + hashlib.sha256(address.encode()).hexdigest())
     token = secrets.token_urlsafe(32)
     async with state.pool.acquire() as conn, conn.transaction():
@@ -95,6 +107,27 @@ async def start_session(request: Request, body: EmptyAction | None = None):
     response.set_cookie(
         COOKIE, token, max_age=3600, path="/demo", httponly=True, samesite="strict",
         secure=state.settings.environment == "production",
+    )
+    return response
+
+
+@router.delete("/session", dependencies=[Depends(same_origin)])
+async def end_session(request: Request):
+    """End the visitor's session so the walkthrough can start again.
+
+    The demo payment's request key is fixed per merchant, so a fresh run needs
+    a fresh session rather than a second payment in this one.
+    """
+    token = request.cookies.get(COOKIE)
+    if token and len(token) <= 128:
+        await request.app.state.pool.execute(
+            "UPDATE demo_sessions SET expires_at = now() WHERE token_hash = $1 AND expires_at > now()",
+            hash_api_key(token),
+        )
+    response = JSONResponse(status_code=200, content={"ended": True})
+    response.delete_cookie(
+        COOKIE, path="/demo", httponly=True, samesite="strict",
+        secure=request.app.state.settings.environment == "production",
     )
     return response
 
