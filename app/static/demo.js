@@ -100,6 +100,9 @@ function render() {
   byId("crumb-id").textContent = payment ? payment.id : "New payment";
   byId("crumb-id").classList.toggle("id", Boolean(payment));
   byId("copy-id").hidden = !payment;
+  const gateway = byId("payment-gateway");
+  gateway.hidden = !payment?.gateway;
+  gateway.textContent = payment?.gateway === "stripe" ? "Stripe test mode" : `Simulated gateway ${payment?.gateway || ""}`;
   byId("next-step").textContent = nextStep(payment, entries);
 
   byId("balance").textContent = money(snapshot?.balance_minor || 0);

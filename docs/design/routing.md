@@ -49,7 +49,7 @@ Only `not_processed` and `unknown` count as errors. A decline proves the gateway
 `ROUTING_STRATEGY` picks one of three:
 
 - `priority` tries gateways in the order they appear in `GATEWAYS`. It is simple and predictable, and most tests use it.
-- `contextual` learns which gateway is best for this kind of payment. See [Contextual ranking](#contextual-ranking) below.
+- `contextual` is an experiment that learns which gateway is best for this kind of payment. See [Contextual ranking](#contextual-ranking) below.
 - `success_rate` is the default. Each gateway keeps its last `ROUTING_WINDOW` (100) authorization outcomes in Redis. A success is an approval; declines and errors are failures. For each payment, the router draws one sample per gateway from `Beta(successes + 1, failures + 1)` and tries the gateways in order of their samples.
 
 Thompson sampling handles the trade-off between using the best gateway and checking the others. A gateway at 95% wins almost every draw. A gateway at 40% still wins now and then, so when it recovers, its window fills with fresh successes and its share grows back without a manual reset. A brand new gateway starts at `Beta(1, 1)`, an even guess, so it gets traffic straight away.
@@ -57,6 +57,8 @@ Thompson sampling handles the trade-off between using the best gateway and check
 Declines count against a gateway on purpose. Different gateways get different approval rates for the same cards (issuer relationships, retry logic, 3DS handling), and that difference is what success-rate routing exists to exploit.
 
 ### Contextual ranking
+
+This mode is an experiment. It has only been measured in the simulation below, against gateways whose behaviour per segment is made up. Showing that it helps would take real traffic, so it is off by default.
 
 `success_rate` asks "which gateway is best overall?". But gateways differ by segment: one may approve visa well and mastercard badly, another may struggle with large amounts. A single success rate per gateway averages those differences away. `contextual` asks "which gateway is best for this payment?".
 

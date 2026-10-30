@@ -6,7 +6,7 @@ PaySentry takes card payments for merchants and records every paisa in a double-
 It charges each card exactly once. Clients retry. Two copies of a request arrive at the same moment. A gateway times out and nobody knows if it charged. PaySentry handles each of these, and each one has a test that runs against a real Postgres.
 
 Live demo: [paysentry-demo.onrender.com](https://paysentry-demo.onrender.com).
-It uses synthetic cards and mock gateways. It runs on Render's free plan, so the first request after a quiet spell takes about a minute to wake the server.
+It uses test cards only. Payments go to mock gateways, or to Stripe in test mode when the server has a Stripe test key. It runs on Render's free plan, so the first request after a quiet spell takes about a minute to wake the server.
 
 ![The test console after a capture, a refund and a ledger check](docs/screenshots/demo.png)
 
@@ -77,7 +77,7 @@ The [documentation index](docs/README.md) links the setup guide, architecture, A
 The design docs go into more detail:
 
 - [payments.md](docs/design/payments.md): the payment lifecycle, idempotency keys and card data
-- [gateways.md](docs/design/gateways.md): talking to gateways, and what to do when one doesn't answer
+- [gateways.md](docs/design/gateways.md): talking to gateways, including Stripe in test mode, and what to do when one doesn't answer
 - [routing.md](docs/design/routing.md): picking a gateway, circuit breakers and failover
 
 ## Layout
@@ -86,10 +86,10 @@ The design docs go into more detail:
 app/
   ledger.py       transfers: claim the key, lock rows, write entries
   payments.py     create, capture, void, refund
-  connectors/     one per gateway API
+  connectors/     one per gateway API: two mocks and Stripe
   recovery.py     settles payments whose gateway outcome is unknown
   routing.py      rules, circuit breakers, success-rate ranking
-  contextual.py   LinUCB routing model, used when ROUTING_STRATEGY=contextual
+  contextual.py   experimental LinUCB routing, off unless ROUTING_STRATEGY=contextual
   migrations/     numbered schema changes, each applied once
   routes/         HTTP layer
 gateway/          mock card gateway

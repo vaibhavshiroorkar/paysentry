@@ -57,14 +57,11 @@ async def session_row(request: Request):
 
 
 def client_address(request: Request) -> str:
-    hops = request.app.state.settings.trusted_proxy_hops
-    if hops:
-        forwarded = [
-            part.strip() for value in request.headers.getlist("X-Forwarded-For") for part in value.split(",")
-        ]
-        forwarded = [part for part in forwarded if part]
-        if len(forwarded) >= hops:
-            return forwarded[-hops]
+    # X-Forwarded-For is no use here: on Render it ends in internal proxy
+    # addresses that change between requests.
+    header = request.app.state.settings.client_ip_header
+    if header and (value := request.headers.get(header, "").strip()):
+        return value
     return request.client.host if request.client else "unknown"
 
 

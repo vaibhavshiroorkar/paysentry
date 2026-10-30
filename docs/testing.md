@@ -56,11 +56,12 @@ Run one failing test with `-x --tb=short` while diagnosing a setup failure.
 | [test_payment_model.py](../tests/test_payment_model.py) | Seeded random operation sequences checked against an independent model |
 | [test_gateway_mock.py](../tests/test_gateway_mock.py) | Alpha and beta contracts, reference reuse, money conversion and failure controls |
 | [test_connectors.py](../tests/test_connectors.py) | Normalized outcomes, connection errors, timeouts, dropped replies and beta decimals |
+| [test_stripe.py](../tests/test_stripe.py) | Stripe connector against [a fake Stripe](../tests/fake_stripe.py): test card mapping, idempotent repeats, status codes, paged lookup, test-key enforcement and an end-to-end payment |
 | [test_payment_gateways.py](../tests/test_payment_gateways.py) | End-to-end gateway lifecycles, pending outcomes and reservation release |
 | [test_recovery.py](../tests/test_recovery.py) | Crashes, lookups, leases, competing finishers, missing gateways and background passes |
 | [test_routing.py](../tests/test_routing.py) | Eligibility, circuits, safe failover, Redis fallback and routing through the payment API |
 | [test_contextual.py](../tests/test_contextual.py) | Features, learning, decay, exploration, finite scores and atomic observations |
-| [test_demo.py](../tests/test_demo.py) | Demo isolation, cookies, origins, expiry, ending a session, quotas, forged forwarded addresses, pending and refused gateway results, replay, redaction, accounting checks and production settings |
+| [test_demo.py](../tests/test_demo.py) | Demo isolation, cookies, origins, expiry, ending a session, quotas, forged client addresses, pending and refused gateway results, replay, redaction, accounting checks and production settings |
 | [test_migrations.py](../tests/test_migrations.py) | Fresh and pre-tracking databases, new migrations applied once, failed migrations rolled back |
 
 The [shared fixtures](../tests/conftest.py) build an application with isolated state and mock transports.

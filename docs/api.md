@@ -96,6 +96,7 @@ All four top-level fields are required.
 Money must be an integer from 1 through `1000000000000`, in INR or USD minor units.
 The card must pass number, expiry, and CVC validation.
 Use only synthetic test cards with the mock gateways.
+The Stripe gateway takes only the test cards listed in [payments.md](design/payments.md#test-cards).
 
 A successful manual authorization returns a payment shaped like this:
 
@@ -109,6 +110,7 @@ A successful manual authorization returns a payment shaped like this:
   "amount_captured": 0,
   "amount_refunded": 0,
   "card": {"brand":"visa","last4":"4242"},
+  "gateway": "alpha",
   "failure_reason": null,
   "created_at": "2026-10-24T10:00:00+00:00",
   "refunds": []
@@ -116,6 +118,7 @@ A successful manual authorization returns a payment shaped like this:
 ```
 
 The ID and timestamp above are illustrative.
+`gateway` names the configured gateway that took the authorization.
 Automatic capture returns `captured` after approval and credits the merchant ledger account.
 Manual authorization posts no money until capture.
 

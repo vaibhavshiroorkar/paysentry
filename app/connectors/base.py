@@ -44,6 +44,9 @@ class Connector(Protocol):
 
 
 class HttpConnector:
+    # Statuses the gateway promises it answers without acting.
+    unprocessed_statuses = frozenset({503})
+
     def __init__(self, name: str, client: httpx.AsyncClient, timeout_sec: float):
         self.name = name
         self._client = client
@@ -61,8 +64,7 @@ class HttpConnector:
         except (TimeoutError, httpx.TransportError):
             # The request may have arrived. Only the gateway knows what it did.
             return UNKNOWN
-        if response.status_code == 503:
-            # Both gateways promise that 503 means nothing was processed.
+        if response.status_code in self.unprocessed_statuses:
             return NOT_PROCESSED
         if response.status_code >= 500:
             return UNKNOWN

@@ -27,10 +27,10 @@ services:
       # The free database allows few connections.
       - key: DB_POOL_SIZE
         value: "5"
-      # Render's proxy appends the visitor's address to X-Forwarded-For. The
-      # demo session limit reads that last entry; the client writes the rest.
-      - key: TRUSTED_PROXY_HOPS
-        value: "1"
+      # Render's edge sets this to the visitor's address and overwrites any
+      # value the client sent. X-Forwarded-For ends in internal proxy addresses.
+      - key: CLIENT_IP_HEADER
+        value: CF-Connecting-IP
 
   - type: keyvalue
     name: paysentry-kv

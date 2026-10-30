@@ -152,7 +152,8 @@ The gateway clearing account takes part in every capture and refund, for every m
 | `4000000000000341` | Approved, but captures and voids are rejected |
 | `4000000000005126` | Approved, but refunds fail |
 
-Any other valid number is approved. The mock gateways implement this table, so it holds on every gateway. Their other behaviour (latency, outages, timeouts) is set per gateway: see [gateways.md](gateways.md#mock-gateway-behaviour).
+Any other valid number is approved. The mock gateways implement this table, so it holds on every mock gateway.
+On the Stripe gateway each card maps to Stripe's own test card, which behaves as Stripe documents it. `4000000000000341` is declined at authorization there, and other numbers are refused. See [gateways.md](gateways.md#stripe). Their other behaviour (latency, outages, timeouts) is set per gateway: see [gateways.md](gateways.md#mock-gateway-behaviour).
 
 ## Status codes
 

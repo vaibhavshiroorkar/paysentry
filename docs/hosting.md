@@ -2,7 +2,7 @@
 
 The [Render Blueprint](../render.yaml) runs the browser demo on Render's free plans, live at [paysentry-demo.onrender.com](https://paysentry-demo.onrender.com).
 It creates one web service and one Key Value instance. Postgres runs on [Neon](https://neon.tech)'s free plan, because Render's free Postgres expires after 30 days.
-The service processes synthetic payments through embedded mock gateways. It never takes real cards.
+The service processes test payments through embedded mock gateways, or through Stripe in test mode if you add a key ([below](#stripe-test-mode)). It never takes real cards.
 
 ## Free tier limits
 
@@ -49,14 +49,28 @@ uvx check-jsonschema --schemafile https://render.com/schema/render.yaml.json ren
 | `DATABASE_URL` | Set in the dashboard | Neon's direct connection string, which stays out of the repository |
 | `REDIS_URL` | From Key Value | Private connection string |
 | `DB_POOL_SIZE` | `5` | Keeps connections well under the free database's limit |
-| `TRUSTED_PROXY_HOPS` | `1` | The demo session limit reads the `X-Forwarded-For` entry Render's proxy appended |
+| `CLIENT_IP_HEADER` | `CF-Connecting-IP` | The demo session limit reads the visitor's address from this header, which Render's edge sets and overwrites |
 
 Key Value has an empty `ipAllowList`, so only services in the same workspace can reach it.
 Neon is reachable from the internet and relies on its password, so keep `DATABASE_URL` secret.
 
 If the service was created before this Blueprint changed, check its environment in the dashboard.
-An old `FORWARDED_ALLOW_IPS=*` makes Uvicorn trust the leftmost, client-written address; remove it.
+Remove an old `FORWARDED_ALLOW_IPS=*` or `TRUSTED_PROXY_HOPS`.
+`X-Forwarded-For` is no use on Render: the client writes its first entries, and the last ones are internal proxy addresses that change between requests.
 The container listens on Render's `PORT`.
+
+## Stripe test mode
+
+The Blueprint runs only the embedded mocks. To send demo payments to Stripe in test mode first, add these in the dashboard:
+
+| Variable | Value |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | Your `sk_test_` key, marked secret |
+| `GATEWAYS` | `{"stripe": {"flavour": "stripe", "url": "https://api.stripe.com"}, "alpha": {"flavour": "alpha", "url": "http://alpha"}}` |
+| `ROUTING_STRATEGY` | `priority` |
+| `GATEWAY_TIMEOUT_SEC` | `10` |
+
+The mock keeps the demo working if Stripe is down or the key is wrong. The console names the gateway that took each payment.
 
 ## Restarts and sleep
 

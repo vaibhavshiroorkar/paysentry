@@ -64,6 +64,7 @@ def payment_body(row, refunds=()) -> dict:
         "amount_captured": row["amount_captured"],
         "amount_refunded": row["amount_refunded"],
         "card": {"brand": row["card_brand"], "last4": row["card_last4"]},
+        "gateway": row["gateway"],
         "failure_reason": row["failure_reason"],
         "created_at": row["created_at"].isoformat(),
         "refunds": [refund_body(r) for r in refunds],

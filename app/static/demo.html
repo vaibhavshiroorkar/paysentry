@@ -7,12 +7,12 @@
   <meta name="color-scheme" content="light dark">
   <title>PaySentry test console</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/demo-assets/demo.css?v=2">
-  <script src="/demo-assets/demo.js?v=2" defer></script>
+  <link rel="stylesheet" href="/demo-assets/demo.css?v=3">
+  <script src="/demo-assets/demo.js?v=3" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#payment">Skip to the payment</a>
-  <div class="test-strip">Test mode. Synthetic card, mock gateways, no real money.</div>
+  <div class="test-strip">Test mode. Test card only, no real money.</div>
   <header class="topbar">
     <div class="topbar-inner">
       <a class="brand" href="/">PaySentry</a>
@@ -35,7 +35,7 @@
       <div class="payment-head">
         <div>
           <h1 id="payment-title"><span id="payment-amount">INR 500.00</span> <span id="payment-status" class="status status--draft">Not created</span></h1>
-          <p class="payment-meta"><span>Visa ending 4242</span><span>Manual capture</span><span>Order PS-001</span></p>
+          <p class="payment-meta"><span>Visa ending 4242</span><span>Manual capture</span><span>Order PS-001</span><span id="payment-gateway" hidden></span></p>
         </div>
       </div>
 
@@ -95,8 +95,9 @@
     <section class="about" aria-label="About this console">
       <div>
         <h2>What runs here</h2>
-        <p>The same payment code, Postgres transactions and Redis limits as the API. Only the card gateways are
-          mocks. Your browser gets its own demo session and never sees a merchant or administrator key.</p>
+        <p>The same payment code, Postgres transactions and Redis limits as the API. Payments go to Stripe in
+          test mode when the server has a test key, and to a simulated gateway otherwise. Your browser gets its own
+          demo session and never sees a merchant or administrator key.</p>
       </div>
       <div>
         <h2>Why the replay matters</h2>

@@ -1,6 +1,6 @@
 [project]
 name = "paysentry"
-version = "0.3.0"
+version = "0.4.0"
 description = "Card payments for merchants on a double-entry ledger that stays correct under retries and races"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

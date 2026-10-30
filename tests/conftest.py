@@ -75,7 +75,8 @@ async def make_client(gateway_apps):
     order (alpha, beta, gamma), and every client checks after the test that
     the ledger still reconciles. `use_gateways` picks which gateways the app
     knows and in what order. `wrap_transport` wraps each gateway's transport,
-    to inject network failures.
+    to inject network failures. `extra_transports` serves gateways that are not
+    mocks, such as a fake Stripe.
     """
     stack = AsyncExitStack()
     to_reconcile = []
@@ -85,6 +86,7 @@ async def make_client(gateway_apps):
         gateway_latency_ms: int = 0,
         wrap_transport=None,
         use_gateways: list[str] | None = None,
+        extra_transports: dict[str, httpx.AsyncBaseTransport] | None = None,
         **overrides,
     ) -> httpx.AsyncClient:
         values = {
@@ -107,6 +109,7 @@ async def make_client(gateway_apps):
             gateway_app.state.gateway.configure(latency_ms=gateway_latency_ms)
             transport = httpx.ASGITransport(app=gateway_app)
             transports[name] = wrap_transport(transport) if wrap_transport else transport
+        transports |= extra_transports or {}
         app = create_app(settings, gateway_transports=transports)
         await stack.enter_async_context(app.router.lifespan_context(app))
         client = await stack.enter_async_context(

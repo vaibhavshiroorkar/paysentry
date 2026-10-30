@@ -218,13 +218,19 @@ async def test_one_address_cannot_open_sessions_without_limit(make_client):
 
 
 async def test_forged_forwarded_entries_do_not_buy_new_sessions(make_client):
-    client = await make_client(demo_enabled=True, trusted_proxy_hops=1)
-    # The client writes everything before the entry the proxy appended.
+    client = await make_client(demo_enabled=True, client_ip_header="CF-Connecting-IP")
+    # The edge overwrites CF-Connecting-IP; X-Forwarded-For is whatever the client wrote.
     statuses = [
-        await new_session_status(client, {"X-Forwarded-For": f"10.0.0.{n}, 203.0.113.9"}) for n in range(4)
+        await new_session_status(client, {"CF-Connecting-IP": "203.0.113.9", "X-Forwarded-For": f"10.0.0.{n}"})
+        for n in range(4)
     ]
     assert statuses == [201, 201, 201, 429]
-    assert await new_session_status(client, {"X-Forwarded-For": "198.51.100.4"}) == 201
+    assert await new_session_status(client, {"CF-Connecting-IP": "198.51.100.4"}) == 201
+
+
+async def test_missing_address_header_falls_back_to_the_socket(make_client):
+    client = await make_client(demo_enabled=True, client_ip_header="CF-Connecting-IP")
+    assert [await new_session_status(client) for _ in range(4)] == [201, 201, 201, 429]
 
 
 async def test_pending_payment_returns_202_with_a_snapshot(make_client, gateways):

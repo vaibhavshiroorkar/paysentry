@@ -1,11 +1,11 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class GatewayConfig(BaseModel):
-    flavour: Literal["alpha", "beta"]
+    flavour: Literal["alpha", "beta", "stripe"]
     url: str
     # What the gateway accepts. None means everything.
     currencies: list[str] | None = None
@@ -30,10 +30,10 @@ class Settings(BaseSettings):
     demo_enabled: bool = False
     demo_embedded_gateways: bool = False
     demo_session_daily_limit: int = Field(default=200, ge=1, le=10_000)
-    # Proxies in front of the app that append to X-Forwarded-For. The demo's
-    # per-address limit reads the entry the last of them wrote; earlier entries
-    # come from the client and can be forged. 0 uses the socket address.
-    trusted_proxy_hops: int = Field(default=0, ge=0, le=5)
+    # A header the hosting edge sets to the visitor's address and overwrites if
+    # the client sent one, such as CF-Connecting-IP on Render. The demo's
+    # per-address limit reads it. Empty uses the socket address.
+    client_ip_header: str = ""
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     # See docs/design/gateways.md, "Settings".
@@ -41,6 +41,8 @@ class Settings(BaseSettings):
         "alpha": GatewayConfig(flavour="alpha", url="http://localhost:9001"),
         "beta": GatewayConfig(flavour="beta", url="http://localhost:9002"),
     }
+    # A Stripe secret key for the stripe flavour. Only test mode keys are accepted.
+    stripe_secret_key: SecretStr | None = None
     gateway_timeout_sec: float = 2.0
     recovery_after_sec: float = 60.0
     recovery_interval_sec: float = 10.0
@@ -69,4 +71,9 @@ class Settings(BaseSettings):
             raise ValueError("Production requires an administrator secret of at least 32 characters")
         if self.demo_embedded_gateways and not self.demo_enabled:
             raise ValueError("Embedded gateways require the demo to be enabled")
+        if any(config.flavour == "stripe" for config in self.gateways.values()):
+            key = self.stripe_secret_key.get_secret_value() if self.stripe_secret_key else ""
+            # PaySentry is a demonstration. A live key would move real money.
+            if not key.startswith(("sk_test_", "rk_test_")):
+                raise ValueError("A stripe gateway needs STRIPE_SECRET_KEY set to a test mode key")
         return self

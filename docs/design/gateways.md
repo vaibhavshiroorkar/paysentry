@@ -13,6 +13,7 @@ payments service --> connector (one per gateway API) --HTTP--> mock gateway serv
 ```
 
 - **Mock gateways** (`gateway/`) are a separate FastAPI service. Docker Compose runs three of them, in two API styles. Tests run the same app in-process.
+- **Stripe** in test mode is an optional real gateway. See [Stripe](#stripe).
 - **Connectors** (`app/connectors/`) translate our four operations (authorize, capture, void, refund) into each gateway's API, and translate the answers back.
 - **Recovery** (`app/recovery.py`) resolves operations whose outcome is unknown. It runs on a timer inside the API process, and admins can trigger it with `POST /internal/recovery/run`.
 
@@ -109,6 +110,43 @@ Every call runs under one deadline (`GATEWAY_TIMEOUT_SEC`, default 2) with `asyn
 
 Beta's decimal strings are converted with `Decimal`, never `float`, and tested at the edges (`5` -> `"0.05"`, `100` -> `"1.00"`).
 
+## Stripe
+
+`app/connectors/stripe.py` runs the same four operations against Stripe's PaymentIntents API in test mode.
+
+| Operation | Stripe call |
+|---|---|
+| Authorize | `POST /v1/payment_intents` with `confirm=true` and `capture_method` `manual` or `automatic` |
+| Look up | `GET /v1/payment_intents`, newest first, matching `metadata[reference]` |
+| Capture | `POST /v1/payment_intents/{id}/capture` with `amount_to_capture` |
+| Void | `POST /v1/payment_intents/{id}/cancel` |
+| Refund | `POST /v1/refunds` with the PaymentIntent and amount |
+
+Every POST sends our reference as Stripe's `Idempotency-Key`, so a repeat returns the first answer and never acts twice.
+Authorizations also carry the reference in `metadata[reference]` for lookup.
+
+Stripe differs from the mocks in four ways:
+
+- **Card numbers never reach Stripe.** Stripe refuses raw card numbers from a server that has not proven PCI compliance, test mode included. The connector maps each [test card](payments.md#test-cards) to Stripe's matching test PaymentMethod, such as `pm_card_visa`. Any other number is declined with `stripe_test_card_required` before a request is sent. A live integration would collect cards in the browser with Stripe's own form and send PaySentry a token.
+- **A 503 is `unknown`.** Stripe does not promise that a 503 did nothing. `401`, `403` and `429` are `not_processed`: Stripe did nothing, so another gateway may try. `409` means another request with the same key is still running, so it is `unknown`. `402` is a decline and keeps Stripe's `decline_code`.
+- **Lookup scans.** Stripe cannot look up a PaymentIntent by our reference. Its search API is eventually consistent and not offered in India, so lookup pages through the PaymentIntents created in the last two days, up to 1,000 of them. If it cannot finish the scan, the outcome stays `unknown` and recovery tries again.
+- **Some failures arrive later.** Stripe reports a refund that fails after it was accepted, as `4000000000005126` does, through webhooks. PaySentry does not consume webhooks, so that refund stays `succeeded`. A card that needs 3D Secure is declined with `authentication_required`, because there is no browser to complete the challenge.
+
+Stripe keeps idempotency keys for 24 hours. Recovery runs every few seconds, so it re-sends long before a key expires.
+
+Only test mode keys are accepted. Settings fail at startup if a `stripe` gateway is configured without a `STRIPE_SECRET_KEY` that starts with `sk_test_` or `rk_test_`. The key goes only to the Stripe client, as a bearer token.
+
+To route payments to Stripe first and fall back to a mock:
+
+```sh
+GATEWAYS='{"stripe": {"flavour": "stripe", "url": "https://api.stripe.com"}, "alpha": {"flavour": "alpha", "url": "http://localhost:9001"}}'
+STRIPE_SECRET_KEY=sk_test_...
+ROUTING_STRATEGY=priority
+GATEWAY_TIMEOUT_SEC=10
+```
+
+Stripe confirms a card in about one to two seconds, so the 2-second default deadline is too short for it.
+
 ## Mock gateway behaviour
 
 Each mock gateway keeps charges and refunds in memory, keyed by our reference. Its behaviour is set through `POST /_control`, or directly on the app object in tests:
@@ -127,7 +165,8 @@ The [test cards](payments.md#test-cards) behave the same on every gateway.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `GATEWAYS` | `{"alpha": {"flavour": "alpha", "url": "http://localhost:9001"}, "beta": {"flavour": "beta", "url": "http://localhost:9002"}}` | JSON: each gateway's name, API flavour and URL |
+| `GATEWAYS` | `{"alpha": {"flavour": "alpha", "url": "http://localhost:9001"}, "beta": {"flavour": "beta", "url": "http://localhost:9002"}}` | JSON: each gateway's name, API flavour (`alpha`, `beta` or `stripe`) and URL |
+| `STRIPE_SECRET_KEY` | empty | Stripe test mode secret key, required when a gateway uses the `stripe` flavour |
 | `GATEWAY_TIMEOUT_SEC` | `2` | Deadline per gateway call |
 | `RECOVERY_AFTER_SEC` | `60` | How long work must be stuck before recovery touches it |
 | `RECOVERY_INTERVAL_SEC` | `10` | How often the recovery loop runs. `0` turns it off |
@@ -138,6 +177,7 @@ The [test cards](payments.md#test-cards) behave the same on every gateway.
 |---|---|
 | `tests/test_gateway_mock.py` | Mock gateway idempotency by reference, both API styles |
 | `tests/test_connectors.py` | Outcome classification for every failure kind, Beta money conversion |
+| `tests/test_stripe.py` | The Stripe connector against an in-memory fake Stripe (`tests/fake_stripe.py`): test card mapping, idempotent repeats, status codes, lookup across pages, test-key enforcement, and a payment through the whole app |
 | `tests/test_payment_gateways.py` | Full payment lifecycle through both gateways |
 | `tests/test_recovery.py` | Timeouts on every operation, crashes before and after the gateway call, recovery leaving fresh work alone, a lookup that itself times out, concurrent finishers, two recovery runs at once, a gateway removed from config, the background loop |
 

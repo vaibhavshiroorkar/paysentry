@@ -92,9 +92,10 @@ Container connection URLs use service names such as `db`; local Python uses `loc
 | `DEMO_ENABLED` | `false` | Serve the browser demo at `/` and its `/demo` routes |
 | `DEMO_EMBEDDED_GATEWAYS` | `false` | Run the mock gateways in process for the demo; requires `DEMO_ENABLED` |
 | `DEMO_SESSION_DAILY_LIMIT` | `200` | New demo sessions allowed per database day, from 1 to 10000 |
-| `TRUSTED_PROXY_HOPS` | `0` | Proxies that append to `X-Forwarded-For`; the demo session limit reads the last one's entry. `0` uses the socket address |
+| `CLIENT_IP_HEADER` | empty | Header the hosting edge sets to the visitor's address, read by the demo session limit. Empty uses the socket address |
 | `LOG_LEVEL` | `INFO` | Application log level, including recovery outcomes |
 | `GATEWAYS` | Alpha on 9001 and beta on 9002 | JSON map of connector names and capabilities |
+| `STRIPE_SECRET_KEY` | empty | Stripe test mode key for a `stripe` gateway; live keys are refused. See [gateways.md](design/gateways.md#stripe) |
 | `GATEWAY_TIMEOUT_SEC` | `2.0` | Whole gateway call deadline; connect timeout is half this |
 | `RECOVERY_AFTER_SEC` | `60.0` | Minimum age before recovery claims an operation |
 | `RECOVERY_INTERVAL_SEC` | `10.0` | Background pass interval; nonpositive values disable the loop |

@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from redis.asyncio import Redis
 
-from app.config import Settings
+from app.config import GatewayConfig, Settings
 from app.db import apply_schema, create_pool
 from app.errors import register_error_handlers
 from app.connectors import build_connector
@@ -17,6 +17,12 @@ from app.ratelimit import RateLimiter
 from app.recovery import recovery_loop
 from app.routing import Router
 from app.routes import accounts, merchants, ops, payments, transfers
+
+
+def gateway_headers(settings: Settings, config: GatewayConfig) -> dict[str, str]:
+    if config.flavour == "stripe" and settings.stripe_secret_key is not None:
+        return {"Authorization": f"Bearer {settings.stripe_secret_key.get_secret_value()}"}
+    return {}
 
 
 @asynccontextmanager
@@ -35,13 +41,16 @@ async def lifespan(app: FastAPI):
         transports = {
             name: httpx.ASGITransport(app=create_gateway_app(config.flavour))
             for name, config in settings.gateways.items()
+            if config.flavour != "stripe"
         }
     # The connect timeout is shorter than the call deadline, so a connection
     # that never opens is reported as such (not processed) rather than as a
     # deadline miss (unknown).
     timeout = httpx.Timeout(settings.gateway_timeout_sec, connect=settings.gateway_timeout_sec / 2)
     clients = {
-        name: httpx.AsyncClient(base_url=config.url, transport=transports.get(name), timeout=timeout)
+        name: httpx.AsyncClient(
+            base_url=config.url, transport=transports.get(name), timeout=timeout, headers=gateway_headers(settings, config)
+        )
         for name, config in settings.gateways.items()
     }
     loop = None
@@ -83,7 +92,7 @@ def create_app(
     settings: Settings | None = None, gateway_transports: dict[str, httpx.AsyncBaseTransport] | None = None
 ) -> FastAPI:
     """`gateway_transports` lets tests serve the mock gateways in-process."""
-    app = FastAPI(title="PaySentry Core", version="0.3.0", lifespan=lifespan)
+    app = FastAPI(title="PaySentry Core", version="0.4.0", lifespan=lifespan)
     app.state.settings = settings or Settings()
     # Uvicorn configures only its own loggers, so without this the recovery
     # loop's records never reach the host's log stream.
