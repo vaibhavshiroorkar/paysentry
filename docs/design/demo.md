@@ -50,16 +50,18 @@ The hosting account and budget remain the user's choice. Do not create paid reso
 
 ## Interface
 
-Use a light blue-gray background, white working surface, navy text, blue actions, and teal balanced states.
-Use a restrained humanist sans-serif font stack with tabular numerals for amounts.
-Place the payment walkthrough beside the ledger so an action and its accounting effect can be compared directly.
-Show real action order rather than decorative dashboard statistics.
-At narrow widths, stack the walkthrough above the ledger.
-Include keyboard focus, polite live status, visible error messages, and reduced-motion support.
+The page looks like a payments console in test mode: a test-mode strip, one payment's detail, its ledger and a log of the requests sent.
+Use the system font stack, tabular numerals for amounts and monospace for IDs and paths. Light and dark themes follow the system setting.
+Put the actions in their real order in one bar, with the next useful one styled as primary and one line saying what it does.
+The ledger shows Debit and Credit columns with totals, so the balance is visible without arithmetic.
+The request log shows each call's method, path, status and whether it was replayed. A replay appears as a second row for the same payment.
+At narrow widths, stack the ledger above the request log.
+Include keyboard focus that moves to the next action, a polite status region, an alert region for errors, and reduced-motion support.
+Read errors from non-JSON responses, since a sleeping host answers with its own page, and keep the snapshot that gateway refusals carry.
 
 ## Scope
 
 Keep the interface fixed to one successful manual payment flow and its replay.
-Gateway outages, webhooks, real checkout, dashboards for real merchants, and schema migration tooling remain later milestones.
+Gateway outages, webhooks, real checkout and dashboards for real merchants remain later milestones.
 Update API, development, architecture, testing, and operations docs to reflect the implemented demo.
 Test isolation, replay, cookie flags, expiry, CSRF, quotas, redaction, accounting failures, and production configuration.
